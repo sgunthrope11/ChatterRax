@@ -1,0 +1,2 @@
+ALTER TABLE CHAT_Sessions
+ALTER COLUMN EndTime datetime NULL;
