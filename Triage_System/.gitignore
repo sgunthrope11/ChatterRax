@@ -1,5 +1,4 @@
 # Ignore test files
-test_db.py
 query_runner.py
 
 # Ignore Python cache files
