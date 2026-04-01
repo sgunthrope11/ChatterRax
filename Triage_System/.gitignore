@@ -1,0 +1,17 @@
+# Ignore test files
+test_db.py
+query_runner.py
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore environment files
+.env
+*.env
+
+# ignore logs
+test_log.txt
+logs/
+*.log
