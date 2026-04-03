@@ -9,23 +9,60 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Home route - serves the chat interface
+# =========================
+# Home route
+# serves the chat interface
+# =========================
 @app.route("/")
 def index():
     return render_template("index.html")
 
-# Admin route - serves the admin interface
+# =========================
+# Admin route
+# serves the admin interface
+# =========================
 @app.route("/admin")
 def admin():
     return render_template("admin.html")
 
-# Chat route - main endpoint that processes messages
+# =========================
+# Chat route
+# main endpoint that
+# processes messages
+# =========================
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
+        # Fix 3: null check the parsed JSON body
         data = request.get_json()
-        user_message = data.get("message", "")
+        if not data:
+            return jsonify({
+                "reply": "Invalid request. Please send a valid message.",
+                "resolved": False,
+                "ticket_id": None,
+                "error": True
+            }), 400
+
+        user_message = data.get("message", "").strip()
         user_id = data.get("user_id", 1)
+
+        # Fix 1: validate message is not empty
+        if not user_message:
+            return jsonify({
+                "reply": "Please type a message before sending.",
+                "resolved": False,
+                "ticket_id": None,
+                "error": True
+            }), 400
+
+        # Fix 2: validate user_id is a positive integer
+        if not isinstance(user_id, int) or user_id <= 0:
+            return jsonify({
+                "reply": "Invalid user. Please refresh and try again.",
+                "resolved": False,
+                "ticket_id": None,
+                "error": True
+            }), 400
 
         # Step 1: create a chat session
         session_id = create_chat_session(user_id, ticket_id=None)
@@ -38,13 +75,19 @@ def chat():
             }), 500
 
         # Step 2: save the user message
-        save_chat_message(session_id, "user", user_message)
+        # Fix 4: check if message save failed
+        user_message_saved = save_chat_message(session_id, "user", user_message)
+        if not user_message_saved:
+            print(f"Warning: Failed to save user message for session {session_id}")
 
         # Step 3: run through bot logic
         result = handle_message(user_message)
 
         # Step 4: save the bot reply
-        save_chat_message(session_id, "bot", result["reply"])
+        # Fix 4: check if bot reply save failed
+        bot_message_saved = save_chat_message(session_id, "bot", result["reply"])
+        if not bot_message_saved:
+            print(f"Warning: Failed to save bot reply for session {session_id}")
 
         # Step 5: if not resolved create a ticket
         ticket_id = None
@@ -71,7 +114,7 @@ def chat():
         })
 
     except Exception as e:
-        print(f"Error in /chat route: {e}")
+        print(f"Unexpected error in /chat route: {e}")
         return jsonify({
             "reply": "We are experiencing technical difficulties. Please try again shortly.",
             "resolved": False,
@@ -79,7 +122,12 @@ def chat():
             "error": True
         }), 500
 
-# Tickets GET route - returns all open and in progress tickets
+
+# =========================
+# Tickets GET route
+# returns all open and
+# in progress tickets
+# =========================
 @app.route("/tickets", methods=["GET"])
 def tickets():
     try:
@@ -89,31 +137,53 @@ def tickets():
                 "error": True,
                 "message": "Unable to retrieve tickets at this time."
             }), 500
+
         return jsonify({
             "error": False,
             "tickets": ticket_list
         })
+
     except Exception as e:
-        print(f"Error in /tickets route: {e}")
+        print(f"Unexpected error in /tickets route: {e}")
         return jsonify({
             "error": True,
             "message": "Unable to retrieve tickets at this time."
         }), 500
 
-# Tickets update POST route - updates a ticket status
+
+# =========================
+# Tickets update POST route
+# updates a ticket status
+# =========================
 @app.route("/tickets/update", methods=["POST"])
 def tickets_update():
     try:
+        # Fix 3: null check the parsed JSON body
         data = request.get_json()
+        if not data:
+            return jsonify({
+                "error": True,
+                "message": "Invalid request. Please send a valid JSON body."
+            }), 400
+
         ticket_id = data.get("ticket_id")
         new_status = data.get("status")
 
+        # Check both fields are present
         if not ticket_id or not new_status:
             return jsonify({
                 "error": True,
                 "message": "ticket_id and status are required."
             }), 400
 
+        # Fix 5: validate ticket_id is actually an integer
+        if not isinstance(ticket_id, int) or ticket_id <= 0:
+            return jsonify({
+                "error": True,
+                "message": "ticket_id must be a valid positive number."
+            }), 400
+
+        # Validate status is one of the allowed values
         valid_statuses = ["Open", "In Progress", "Resolved"]
         if new_status not in valid_statuses:
             return jsonify({
@@ -134,11 +204,12 @@ def tickets_update():
         })
 
     except Exception as e:
-        print(f"Error in /tickets/update route: {e}")
+        print(f"Unexpected error in /tickets/update route: {e}")
         return jsonify({
             "error": True,
             "message": "Unable to update ticket at this time."
         }), 500
+
 
 if __name__ == "__main__":
     debug_mode = os.environ.get("FLASK_DEBUG", "False") == "True"
