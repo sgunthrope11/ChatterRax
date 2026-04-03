@@ -113,3 +113,85 @@ def save_chat_message(session_id, sender, message_text):
             cursor.close()
         if conn:
             conn.close()
+
+
+# =========================
+# get_open_tickets function
+# =========================
+def get_open_tickets():
+    """
+    Returns all tickets with status Open or In Progress.
+    Returns a list of dicts or None if it fails.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = """
+        SELECT t.TicketID, t.UserID, u.UserName, t.Priority,
+               t.Description, t.Status, t.CreatedAt, t.UpdatedAt
+        FROM Tickets t
+        JOIN Users u ON t.UserID = u.UserID
+        WHERE t.Status IN ('Open', 'In Progress')
+        ORDER BY t.CreatedAt DESC
+        """
+
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        columns = [column[0] for column in cursor.description]
+
+        tickets = []
+        for row in rows:
+            tickets.append(dict(zip(columns, [
+                str(value) if not isinstance(value, (int, str, type(None))) else value
+                for value in row
+            ])))
+
+        return tickets
+
+    except pyodbc.Error as e:
+        print("Error fetching open tickets:", e)
+        return None
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+# =========================
+# update_ticket_status function
+# =========================
+def update_ticket_status(ticket_id, new_status):
+    """
+    Updates the Status and UpdatedAt fields of a ticket.
+    Returns True if successful, False if it fails.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = """
+        UPDATE Tickets
+        SET Status = ?, UpdatedAt = GETDATE()
+        WHERE TicketID = ?
+        """
+
+        cursor.execute(query, (new_status, ticket_id))
+        conn.commit()
+        return True
+
+    except pyodbc.Error as e:
+        print("Error updating ticket status:", e)
+        return False
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
