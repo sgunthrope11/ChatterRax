@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ticket Admin — Triage Dashboard</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      --blue-900: #0a1628;
+      --blue-800: #0f2040;
+      --blue-700: #1a3560;
+      --blue-600: #1e4db7;
+      --blue-500: #2563eb;
+      --blue-400: #3b82f6;
+      --blue-300: #93c5fd;
+      --blue-100: #dbeafe;
+      --blue-50:  #eff6ff;
+      --white:    #ffffff;
+      --gray-50:  #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-400: #94a3b8;
+      --gray-600: #475569;
+      --gray-800: #1e293b;
+
+      --priority-high:   #fef2f2;
+      --priority-high-b: #ef4444;
+      --priority-med:    #fff7ed;
+      --priority-med-b:  #f97316;
+      --priority-low:    #f0fdf4;
+      --priority-low-b:  #22c55e;
+
+      --radius: 10px;
+      --shadow: 0 4px 24px rgba(30,77,183,0.08);
+      --shadow-lg: 0 8px 40px rgba(30,77,183,0.13);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-800);
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, var(--blue-800) 0%, var(--blue-600) 100%);
+      padding: 0 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 68px;
+      box-shadow: 0 2px 20px rgba(10,22,40,.35);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-brand .logo {
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .header-brand .logo svg { width: 20px; height: 20px; }
+
+    .header-brand h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--white);
+      letter-spacing: 0.01em;
+    }
+
+    .header-brand span {
+      font-size: 0.78rem;
+      color: var(--blue-300);
+      font-weight: 400;
+      margin-left: 2px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .refresh-btn {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: var(--white);
+      padding: 7px 16px;
+      border-radius: 7px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: background 0.18s, border-color 0.18s;
+    }
+
+    .refresh-btn:hover {
+      background: rgba(255,255,255,0.22);
+      border-color: rgba(255,255,255,0.35);
+    }
+
+    /* ── MAIN ── */
+    main { padding: 32px 40px 48px; max-width: 1400px; margin: 0 auto; }
+
+    /* ── ALERT ── */
+    #alert-box {
+      display: none;
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 24px;
+      border-left: 4px solid transparent;
+      animation: slideIn 0.25s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #alert-box.success {
+      background: #f0fdf4;
+      border-color: #22c55e;
+      color: #166534;
+    }
+
+    #alert-box.error {
+      background: #fef2f2;
+      border-color: #ef4444;
+      color: #991b1b;
+    }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 18px 26px;
+      box-shadow: var(--shadow);
+      flex: 1;
+      min-width: 160px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .stat-icon {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stat-icon.blue { background: var(--blue-50); }
+    .stat-icon.red  { background: #fef2f2; }
+    .stat-icon.orange { background: #fff7ed; }
+    .stat-icon.green  { background: #f0fdf4; }
+
+    .stat-icon svg { width: 20px; height: 20px; }
+
+    .stat-info { display: flex; flex-direction: column; gap: 2px; }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--blue-800);
+      font-family: 'DM Mono', monospace;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.78rem;
+      color: var(--gray-400);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── TABLE CONTAINER ── */
+    .table-container {
+      background: var(--white);
+      border-radius: var(--radius);
+      border: 1px solid var(--gray-200);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--gray-100);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .table-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--gray-800);
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .table-title::before {
+      content: '';
+      display: inline-block;
+      width: 10px; height: 10px;
+      background: var(--blue-500);
+      border-radius: 50%;
+    }
+
+    .table-timestamp {
+      font-size: 0.78rem;
+      color: var(--gray-400);
+      font-family: 'DM Mono', monospace;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead tr {
+      background: var(--gray-50);
+    }
+
+    th {
+      padding: 11px 16px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      border-bottom: 1px solid var(--gray-200);
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--gray-100);
+      transition: background 0.12s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--blue-50); }
+
+    td {
+      padding: 13px 16px;
+      font-size: 0.875rem;
+      vertical-align: middle;
+    }
+
+    .ticket-id {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--blue-500);
+      font-weight: 500;
+    }
+
+    .user-name {
+      font-weight: 600;
+      color: var(--gray-800);
+    }
+
+    .department {
+      font-size: 0.8rem;
+      color: var(--gray-600);
+    }
+
+    /* priority badge */
+    .priority-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: capitalize;
+      white-space: nowrap;
+    }
+
+    .priority-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .priority-badge.high {
+      background: var(--priority-high);
+      color: var(--priority-high-b);
+    }
+    .priority-badge.high::before { background: var(--priority-high-b); }
+
+    .priority-badge.medium {
+      background: var(--priority-med);
+      color: var(--priority-med-b);
+    }
+    .priority-badge.medium::before { background: var(--priority-med-b); }
+
+    .priority-badge.low {
+      background: var(--priority-low);
+      color: var(--priority-low-b);
+    }
+    .priority-badge.low::before { background: var(--priority-low-b); }
+
+    /* description */
+    .desc-cell {
+      max-width: 280px;
+      color: var(--gray-600);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* status badge */
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--blue-50);
+      color: var(--blue-600);
+      white-space: nowrap;
+    }
+
+    .status-badge.in-progress { background: #fefce8; color: #a16207; }
+    .status-badge.resolved    { background: #f0fdf4; color: #166534; }
+    .status-badge.closed      { background: var(--gray-100); color: var(--gray-600); }
+
+    /* actions cell */
+    .actions-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    select.status-select {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      padding: 6px 10px;
+      border: 1px solid var(--gray-200);
+      border-radius: 7px;
+      background: var(--white);
+      color: var(--gray-800);
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    select.status-select:focus {
+      border-color: var(--blue-400);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+
+    button.update-btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 6px 16px;
+      border: none;
+      border-radius: 7px;
+      background: var(--blue-500);
+      color: var(--white);
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    button.update-btn:hover  { background: var(--blue-600); }
+    button.update-btn:active { transform: scale(0.97); }
+    button.update-btn:disabled {
+      background: var(--gray-200);
+      color: var(--gray-400);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── EMPTY / LOADING ── */
+    .state-row td {
+      text-align: center;
+      padding: 56px 24px;
+      color: var(--gray-400);
+      font-size: 0.9rem;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 22px; height: 22px;
+      border: 3px solid var(--blue-100);
+      border-top-color: var(--blue-500);
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      main { padding: 20px 16px 36px; }
+      header { padding: 0 16px; }
+      th:nth-child(5), td:nth-child(5) { display: none; }
+    }
+
+    @media (max-width: 640px) {
+      th:nth-child(3), td:nth-child(3),
+      th:nth-child(7), td:nth-child(7) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 11l3 3L22 4"/>
+        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+      </svg>
+    </div>
+    <h1>Triage Admin <span>/ Ticket Console</span></h1>
+  </div>
+  <div class="header-right">
+    <button class="refresh-btn" onclick="loadTickets()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+
+  <!-- ALERT -->
+  <div id="alert-box" role="alert"></div>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-icon blue">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value" id="count-total">—</div>
+        <div class="stat-label">Total Open</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon red">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value" id="count-high">—</div>
+        <div class="stat-label">High Priority</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon orange">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value" id="count-medium">—</div>
+        <div class="stat-label">Medium Priority</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value" id="count-low">—</div>
+        <div class="stat-label">Low Priority</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-container">
+    <div class="table-header">
+      <div class="table-title">Open Tickets</div>
+      <div class="table-timestamp" id="last-updated">Not yet loaded</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Ticket ID</th>
+          <th>User</th>
+          <th>Department</th>
+          <th>Priority</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="ticket-tbody">
+        <tr class="state-row">
+          <td colspan="7">
+            <span class="spinner"></span>Loading tickets…
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+<script>
+  const STATUS_OPTIONS = ['Open', 'In Progress', 'Resolved', 'Closed'];
+
+  async function loadTickets() {
+    const tbody = document.getElementById('ticket-tbody');
+    tbody.innerHTML = `<tr class="state-row"><td colspan="7"><span class="spinner"></span>Loading tickets…</td></tr>`;
+
+    try {
+      const res  = await fetch('/tickets');
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+      const data = await res.json();
+      renderTable(data);
+      updateStats(data);
+      document.getElementById('last-updated').textContent =
+        'Last updated: ' + new Date().toLocaleTimeString();
+    } catch (err) {
+      tbody.innerHTML = `<tr class="state-row"><td colspan="7">⚠️ Failed to load tickets: ${err.message}</td></tr>`;
+    }
+  }
+
+  function renderTable(tickets) {
+    const tbody = document.getElementById('ticket-tbody');
+
+    if (!tickets.length) {
+      tbody.innerHTML = `<tr class="state-row"><td colspan="7">✅ No open tickets found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = tickets.map(t => {
+      const pri = (t.Priority || '').toLowerCase();
+      const statusClass = t.Status
+        ? t.Status.toLowerCase().replace(/\s+/g, '-')
+        : 'open';
+
+      const opts = STATUS_OPTIONS.map(s =>
+        `<option value="${s}" ${s === t.Status ? 'selected' : ''}>${s}</option>`
+      ).join('');
+
+      return `
+        <tr id="row-${t.TicketID}">
+          <td><span class="ticket-id">#${t.TicketID}</span></td>
+          <td><div class="user-name">${esc(t.UserName)}</div></td>
+          <td><span class="department">${esc(t.Department)}</span></td>
+          <td><span class="priority-badge ${pri}">${esc(t.Priority)}</span></td>
+          <td><div class="desc-cell" title="${esc(t.Description)}">${esc(t.Description)}</div></td>
+          <td><span class="status-badge ${statusClass}">${esc(t.Status)}</span></td>
+          <td>
+            <div class="actions-cell">
+              <select class="status-select" id="sel-${t.TicketID}">${opts}</select>
+              <button class="update-btn" onclick="updateTicket(${t.TicketID})">Update</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  async function updateTicket(ticketId) {
+    const select = document.getElementById(`sel-${ticketId}`);
+    const btn    = select.closest('.actions-cell').querySelector('.update-btn');
+    const newStatus = select.value;
+
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      const res  = await fetch('/tickets/update', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ ticket_id: ticketId, new_status: newStatus })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        showAlert(`Ticket #${ticketId} updated to "${newStatus}" successfully.`, 'success');
+        await loadTickets();
+      } else {
+        showAlert(`Update failed: ${data.message}`, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Update';
+      }
+    } catch (err) {
+      showAlert(`Network error: ${err.message}`, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Update';
+    }
+  }
+
+  function updateStats(tickets) {
+    document.getElementById('count-total').textContent  = tickets.length;
+    document.getElementById('count-high').textContent   = tickets.filter(t => t.Priority?.toLowerCase() === 'high').length;
+    document.getElementById('count-medium').textContent = tickets.filter(t => t.Priority?.toLowerCase() === 'medium').length;
+    document.getElementById('count-low').textContent    = tickets.filter(t => t.Priority?.toLowerCase() === 'low').length;
+  }
+
+  let alertTimer;
+  function showAlert(msg, type) {
+    const box = document.getElementById('alert-box');
+    box.textContent = type === 'success' ? '✓  ' + msg : '✗  ' + msg;
+    box.className   = type;
+    box.style.display = 'block';
+    clearTimeout(alertTimer);
+    alertTimer = setTimeout(() => { box.style.display = 'none'; }, 5000);
+  }
+
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadTickets();
+</script>
+</body>
+</html>
