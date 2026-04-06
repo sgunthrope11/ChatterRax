@@ -12,7 +12,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
+            background-color: #f0f6ff;
         }
 
         #chat-container {
@@ -20,13 +20,13 @@
             height: 600px;
             background: white;
             border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-shadow: 0 0 12px rgba(0,0,0,0.08);
             display: flex;
             flex-direction: column;
         }
 
         #chat-header {
-            background: #4a90e2;
+            background: #0d6efd;
             color: white;
             padding: 15px;
             border-radius: 10px 10px 0 0;
@@ -44,26 +44,51 @@
             gap: 10px;
         }
 
-        .message {
+        .message-wrapper {
+            display: flex;
+            flex-direction: column;
             max-width: 75%;
-            padding: 10px 15px;
-            border-radius: 18px;
+        }
+
+        .user-wrapper {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .bot-wrapper {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+
+        .message {
+            padding: 10px 14px;
+            border-radius: 16px;
             font-size: 14px;
             line-height: 1.4;
         }
 
         .user-message {
-            background: #4a90e2;
+            background: #0d6efd;
             color: white;
-            align-self: flex-end;
             border-bottom-right-radius: 4px;
         }
 
         .bot-message {
-            background: #f0f0f0;
+            background: #e9f2ff;
             color: #333;
-            align-self: flex-start;
             border-bottom-left-radius: 4px;
+        }
+
+        .ticket {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            color: #856404;
+        }
+
+        .timestamp {
+            font-size: 10px;
+            color: #666;
+            margin-top: 3px;
         }
 
         #input-area {
@@ -84,7 +109,7 @@
 
         #send-btn {
             padding: 10px 20px;
-            background: #4a90e2;
+            background: #0d6efd;
             color: white;
             border: none;
             border-radius: 20px;
@@ -92,8 +117,27 @@
             font-size: 14px;
         }
 
-        #send-btn:hover {
-            background: #357abd;
+        #send-btn:disabled {
+            background: #9bbcf5;
+            cursor: not-allowed;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin: 0 2px;
+            background: #666;
+            border-radius: 50%;
+            animation: blink 1.4s infinite both;
+        }
+
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes blink {
+            0%, 80%, 100% { opacity: 0.2; }
+            40% { opacity: 1; }
         }
     </style>
 </head>
@@ -101,66 +145,121 @@
     <div id="chat-container">
         <div id="chat-header">Support Chat</div>
         <div id="chat-box">
-            <div class="message bot-message">
-                Hi! I am your support assistant. How can I help you today?
+            <div class="message-wrapper bot-wrapper">
+                <div class="message bot-message">
+                    Hi! I am your support assistant. How can I help you today?
+                </div>
+                <div class="timestamp"></div>
             </div>
         </div>
         <div id="input-area">
-            <input
-                type="text"
-                id="user-input"
-                placeholder="Type your message here..."
-            />
+            <input type="text" id="user-input" placeholder="Type your message here..." />
             <button id="send-btn">Send</button>
         </div>
     </div>
 
-    <script>
-        const chatBox = document.getElementById("chat-box");
-        const userInput = document.getElementById("user-input");
-        const sendBtn = document.getElementById("send-btn");
+<script>
+const chatBox = document.getElementById("chat-box");
+const userInput = document.getElementById("user-input");
+const sendBtn = document.getElementById("send-btn");
 
-        function addMessage(text, sender) {
-            const msg = document.createElement("div");
-            msg.classList.add("message");
-            msg.classList.add(sender === "user" ? "user-message" : "bot-message");
-            msg.textContent = text;
-            chatBox.appendChild(msg);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
+function getTime() {
+    const now = new Date();
+    let h = now.getHours();
+    let m = now.getMinutes().toString().padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${m} ${ampm}`;
+}
 
-        async function sendMessage() {
-            const message = userInput.value.trim();
-            if (!message) return;
+function addMessage(text, sender, extraClass="") {
+    const wrapper = document.createElement("div");
+    wrapper.className = `message-wrapper ${sender === "user" ? "user-wrapper" : "bot-wrapper"}`;
 
-            addMessage(message, "user");
-            userInput.value = "";
+    const msg = document.createElement("div");
+    msg.className = `message ${sender === "user" ? "user-message" : "bot-message"} ${extraClass}`;
+    msg.innerHTML = text;
 
-            try {
-                const response = await fetch("/chat", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ message: message, user_id: 1 })
-                });
+    const time = document.createElement("div");
+    time.className = "timestamp";
+    time.textContent = getTime();
 
-                const data = await response.json();
-                addMessage(data.reply, "bot");
+    wrapper.appendChild(msg);
+    wrapper.appendChild(time);
 
-                if (!data.resolved) {
-                    addMessage("A ticket has been created and an admin will follow up shortly.", "bot");
-                }
+    chatBox.appendChild(wrapper);
+    chatBox.scrollTop = chatBox.scrollHeight;
 
-            } catch (error) {
-                addMessage("Something went wrong. Please try again.", "bot");
-            }
-        }
+    return wrapper;
+}
 
-        sendBtn.addEventListener("click", sendMessage);
+function showTyping() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "message-wrapper bot-wrapper";
+    wrapper.id = "typing";
 
-        userInput.addEventListener("keypress", function(e) {
-            if (e.key === "Enter") sendMessage();
+    const msg = document.createElement("div");
+    msg.className = "message bot-message";
+    msg.innerHTML = `Bot is typing <span class="typing-dots"><span></span><span></span><span></span></span>`;
+
+    wrapper.appendChild(msg);
+    chatBox.appendChild(wrapper);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function removeTyping() {
+    const t = document.getElementById("typing");
+    if (t) t.remove();
+}
+
+async function sendMessage() {
+    const message = userInput.value.trim();
+    if (!message) return;
+
+    addMessage(message, "user");
+    userInput.value = "";
+
+    userInput.disabled = true;
+    sendBtn.disabled = true;
+
+    showTyping();
+
+    try {
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: message, user_id: 1 })
         });
-    </script>
+
+        const data = await response.json();
+
+        removeTyping();
+
+        addMessage(data.reply, "bot");
+
+        if (data.resolved === false && data.ticket_id) {
+            addMessage(
+                `Your issue has been escalated. Ticket #${data.ticket_id} has been created. An admin will follow up shortly.`,
+                "bot",
+                "ticket"
+            );
+        }
+
+    } catch (error) {
+        removeTyping();
+        addMessage("Something went wrong. Please try again.", "bot");
+    }
+
+    userInput.disabled = false;
+    sendBtn.disabled = false;
+    userInput.focus();
+}
+
+sendBtn.addEventListener("click", sendMessage);
+
+userInput.addEventListener("keypress", function(e) {
+    if (e.key === "Enter" && !sendBtn.disabled) sendMessage();
+});
+</script>
 </body>
 </html>
-```

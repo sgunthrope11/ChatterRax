@@ -22,25 +22,17 @@ def chat():
     user_id = data.get("user_id", 1)
 
     # Step 1: create a chat session
-    session_id = create_chat_session(user_id, ticket_id=None)
+    ## session_id = create_chat_session(user_id, ticket_id=None)
 
     # Step 2: save the user message
-    save_chat_message(session_id, "user", user_message)
+    ## save_chat_message(session_id, "user", user_message)
 
     # Step 3: run through bot logic
     result = handle_message(user_message)
 
     # Step 4: save the bot reply
-    save_chat_message(session_id, "bot", result["reply"])
+    ## save_chat_message(session_id, "bot", result["reply"])
 
-    # Step 5: if not resolved create a ticket
-    if not result["resolved"]:
-        ticket_id = create_ticket(
-            user_id=user_id,
-            description=user_message,
-            priority="low"
-        )
-        print(f"Ticket created: #{ticket_id}")
 
     return jsonify({
         "reply": result["reply"],
