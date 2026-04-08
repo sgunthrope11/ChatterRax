@@ -1,29 +1,52 @@
 import os
+
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, render_template
-from bot_logic import handle_message
-from db_service import create_ticket, create_chat_session, save_chat_message, get_open_tickets, update_ticket_status
+from flask import Flask, jsonify, redirect, render_template, request, url_for
+
+try:
+    from bot_logic import handle_message
+    from db_service import (
+        create_chat_session,
+        create_ticket,
+        get_open_tickets,
+        link_ticket_to_session,
+        save_chat_message,
+        update_ticket_status,
+    )
+except ModuleNotFoundError:
+    from .bot_logic import handle_message
+    from .db_service import (
+        create_chat_session,
+        create_ticket,
+        get_open_tickets,
+        link_ticket_to_session,
+        save_chat_message,
+        update_ticket_status,
+    )
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 
-# =========================
-# Home route
-# serves the chat interface
-# =========================
-@app.route("/")
-def index():
-    return render_template("index.html")
 
 # =========================
-# Admin route
-# serves the admin interface
+# Navigation routes
 # =========================
+@app.route("/")
+def home():
+    return redirect(url_for("chatbot_page"))
+
+
+@app.route("/chatbot")
+def chatbot_page():
+    return render_template("index.html")
+
+
 @app.route("/admin")
-def admin():
+def admin_page():
     return render_template("admin.html")
+
 
 # =========================
 # Chat route
@@ -33,8 +56,7 @@ def admin():
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        # Fix 3: null check the parsed JSON body
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({
                 "reply": "Invalid request. Please send a valid message.",
@@ -46,7 +68,6 @@ def chat():
         user_message = data.get("message", "").strip()
         user_id = data.get("user_id", 1)
 
-        # Fix 1: validate message is not empty
         if not user_message:
             return jsonify({
                 "reply": "Please type a message before sending.",
@@ -55,7 +76,6 @@ def chat():
                 "error": True
             }), 400
 
-        # Fix 2: validate user_id is a positive integer
         if not isinstance(user_id, int) or user_id <= 0:
             return jsonify({
                 "reply": "Invalid user. Please refresh and try again.",
@@ -64,7 +84,6 @@ def chat():
                 "error": True
             }), 400
 
-        # Step 1: create a chat session
         session_id = create_chat_session(user_id, ticket_id=None)
         if session_id is None:
             return jsonify({
@@ -74,22 +93,16 @@ def chat():
                 "error": True
             }), 500
 
-        # Step 2: save the user message
-        # Fix 4: check if message save failed
         user_message_saved = save_chat_message(session_id, "user", user_message)
         if not user_message_saved:
             print(f"Warning: Failed to save user message for session {session_id}")
 
-        # Step 3: run through bot logic
         result = handle_message(user_message)
 
-        # Step 4: save the bot reply
-        # Fix 4: check if bot reply save failed
         bot_message_saved = save_chat_message(session_id, "bot", result["reply"])
         if not bot_message_saved:
             print(f"Warning: Failed to save bot reply for session {session_id}")
 
-        # Step 5: if not resolved create a ticket
         ticket_id = None
         if not result["resolved"]:
             ticket_id = create_ticket(
@@ -104,6 +117,15 @@ def chat():
                     "ticket_id": None,
                     "error": True
                 }), 500
+
+            if not link_ticket_to_session(session_id, ticket_id):
+                return jsonify({
+                    "reply": "We created your ticket, but could not finish linking the chat session.",
+                    "resolved": False,
+                    "ticket_id": ticket_id,
+                    "error": True
+                }), 500
+
             print(f"Ticket created: #{ticket_id}")
 
         return jsonify({
@@ -135,7 +157,8 @@ def tickets():
         if ticket_list is None:
             return jsonify({
                 "error": True,
-                "message": "Unable to retrieve tickets at this time."
+                "message": "Unable to retrieve tickets at this time.",
+                "tickets": []
             }), 500
 
         return jsonify({
@@ -147,7 +170,8 @@ def tickets():
         print(f"Unexpected error in /tickets route: {e}")
         return jsonify({
             "error": True,
-            "message": "Unable to retrieve tickets at this time."
+            "message": "Unable to retrieve tickets at this time.",
+            "tickets": []
         }), 500
 
 
@@ -158,8 +182,7 @@ def tickets():
 @app.route("/tickets/update", methods=["POST"])
 def tickets_update():
     try:
-        # Fix 3: null check the parsed JSON body
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({
                 "error": True,
@@ -169,30 +192,33 @@ def tickets_update():
         ticket_id = data.get("ticket_id")
         new_status = data.get("status")
 
-        # Check both fields are present
         if not ticket_id or not new_status:
             return jsonify({
                 "error": True,
                 "message": "ticket_id and status are required."
             }), 400
 
-        # Fix 5: validate ticket_id is actually an integer
         if not isinstance(ticket_id, int) or ticket_id <= 0:
             return jsonify({
                 "error": True,
                 "message": "ticket_id must be a valid positive number."
             }), 400
 
-        # Validate status is one of the allowed values
-        valid_statuses = ["Open", "In Progress", "Resolved"]
+        valid_statuses = ["Open", "In Progress", "Resolved", "Closed"]
         if new_status not in valid_statuses:
             return jsonify({
                 "error": True,
                 "message": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
             }), 400
 
-        success = update_ticket_status(ticket_id, new_status)
-        if not success:
+        update_result = update_ticket_status(ticket_id, new_status)
+        if update_result == "not_found":
+            return jsonify({
+                "error": True,
+                "message": f"Ticket #{ticket_id} was not found."
+            }), 404
+
+        if update_result != "updated":
             return jsonify({
                 "error": True,
                 "message": "Unable to update ticket at this time."

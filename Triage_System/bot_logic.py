@@ -1,5 +1,5 @@
 def handle_message(message):
-    msg = message.lower()
+    msg = str(message or "").lower()
 
     # Each keyword maps to a specific helpful response
     keyword_responses = {

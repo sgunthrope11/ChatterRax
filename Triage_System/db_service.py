@@ -1,5 +1,9 @@
 import pyodbc
-from connection import get_connection
+
+try:
+    from connection import get_connection
+except ModuleNotFoundError:
+    from .connection import get_connection
 
 # =========================
 # create_ticket function
@@ -74,6 +78,46 @@ def create_chat_session(user_id, ticket_id=None):
 
 
 # =========================
+# link_ticket_to_session function
+# =========================
+def link_ticket_to_session(session_id, ticket_id):
+    """
+    Links an existing ticket to an existing chat session.
+    Returns True if successful, False if it fails or no row is updated.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = """
+        UPDATE Chat_Sessions
+        SET TicketID = ?
+        WHERE SessionID = ?
+        """
+
+        cursor.execute(query, (ticket_id, session_id))
+        if cursor.rowcount == 0:
+            print(f"No chat session found for SessionID {session_id}.")
+            conn.rollback()
+            return False
+
+        conn.commit()
+        return True
+
+    except pyodbc.Error as e:
+        print("Error linking ticket to chat session:", e)
+        return False
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+# =========================
 # save_chat_message function
 # =========================
 def save_chat_message(session_id, sender, message_text):
@@ -130,7 +174,7 @@ def get_open_tickets():
         cursor = conn.cursor()
 
         query = """
-        SELECT t.TicketID, t.UserID, u.UserName, t.Priority,
+        SELECT t.TicketID, t.UserID, u.UserName, u.Department, t.Priority,
                t.Description, t.Status, t.CreatedAt, t.UpdatedAt
         FROM Tickets t
         JOIN Users u ON t.UserID = u.UserID
@@ -168,7 +212,7 @@ def get_open_tickets():
 def update_ticket_status(ticket_id, new_status):
     """
     Updates the Status and UpdatedAt fields of a ticket.
-    Returns True if successful, False if it fails.
+    Returns "updated", "not_found", or "error".
     """
     conn = None
     cursor = None
@@ -183,12 +227,17 @@ def update_ticket_status(ticket_id, new_status):
         """
 
         cursor.execute(query, (new_status, ticket_id))
+        if cursor.rowcount == 0:
+            print(f"No ticket found for TicketID {ticket_id}.")
+            conn.rollback()
+            return "not_found"
+
         conn.commit()
-        return True
+        return "updated"
 
     except pyodbc.Error as e:
         print("Error updating ticket status:", e)
-        return False
+        return "error"
 
     finally:
         if cursor:

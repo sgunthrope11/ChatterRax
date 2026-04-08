@@ -1,5 +1,5 @@
 -- INSERT USERS
-INSERT INTO Users (Username, Email, Department) VALUES
+INSERT INTO Users (UserName, Email, Department) VALUES
 ('AlexJohnson', 'alex.johnson@email.com', 'Support'),
 ('JaneSmith', 'jane.smith@email.com', 'Sales'),
 ('MikeBrown', 'mike.brown@email.com', 'IT'),
@@ -42,20 +42,20 @@ INSERT INTO Chat_Sessions (UserID, TicketID, SessionStatus) VALUES
 -- INSERT CHAT MESSAGES
 INSERT INTO Chat_Messages (SessionID, Sender, MessageText) VALUES
 (1, 'User',  'I cannot log into my account.'),
-(1, 'Agent', 'Have you tried resetting your password?'),
+(1, 'bot', 'Have you tried resetting your password?'),
 (2, 'User',  'My payment keeps failing.'),
-(2, 'Agent', 'We are checking the issue now.'),
+(2, 'bot', 'We are checking the issue now.'),
 (3, 'User',  'Password reset link is not working.'),
-(3, 'Agent', 'Please try again after clearing cache.'),
+(3, 'bot', 'Please try again after clearing cache.'),
 (4, 'User',  'File upload not working.'),
-(4, 'Agent', 'We are fixing this bug.'),
+(4, 'bot', 'We are fixing this bug.'),
 (5, 'User',  'The system is very slow today.'),
 (6, 'User',  'My profile changes are not saving.');
 GO
 -- VIEW (Users + Tickets)
 CREATE VIEW UserTicketDetails AS
 SELECT
-    u.Username,
+    u.UserName,
     u.Email,
     u.Department,
     t.TicketID,
