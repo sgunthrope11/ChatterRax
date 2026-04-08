@@ -3,164 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Triage Chat</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-
-        #chat-container {
-            width: 400px;
-            height: 600px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            display: flex;
-            flex-direction: column;
-        }
-
-        #chat-header {
-            background: #4a90e2;
-            color: white;
-            padding: 15px;
-            border-radius: 10px 10px 0 0;
-            text-align: center;
-            font-size: 18px;
-            font-weight: bold;
-        }
-
-        #chat-box {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .message {
-            max-width: 75%;
-            padding: 10px 15px;
-            border-radius: 18px;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-
-        .user-message {
-            background: #4a90e2;
-            color: white;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }
-
-        .bot-message {
-            background: #f0f0f0;
-            color: #333;
-            align-self: flex-start;
-            border-bottom-left-radius: 4px;
-        }
-
-        #input-area {
-            display: flex;
-            padding: 15px;
-            border-top: 1px solid #eee;
-            gap: 10px;
-        }
-
-        #user-input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            outline: none;
-            font-size: 14px;
-        }
-
-        #send-btn {
-            padding: 10px 20px;
-            background: #4a90e2;
-            color: white;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        #send-btn:hover {
-            background: #357abd;
-        }
-    </style>
+    <title>ChatterRax Bot</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/chatterrax-favicon.svg') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chatterrax.css') }}">
 </head>
-<body>
-    <div id="chat-container">
-        <div id="chat-header">Support Chat</div>
-        <div id="chat-box">
-            <div class="message bot-message">
-                Hi! I am your support assistant. How can I help you today?
+<body class="chatbot-page">
+    <header class="topbar">
+        <div class="brand-lockup">
+            <div class="brand-mark" aria-hidden="true">CR</div>
+            <div class="brand-copy">
+                <div class="brand-title">ChatterRax IT Support</div>
+                <div class="brand-subtitle">Automated Capstone Triage Desk</div>
             </div>
         </div>
-        <div id="input-area">
-            <input
-                type="text"
-                id="user-input"
-                placeholder="Type your message here..."
-            />
-            <button id="send-btn">Send</button>
-        </div>
-    </div>
+        <nav class="nav-links" aria-label="Primary">
+            <a class="active" href="/chatbot">Submit Ticket</a>
+            <a href="/admin">Admin Console</a>
+        </nav>
+    </header>
 
-    <script>
-        const chatBox = document.getElementById("chat-box");
-        const userInput = document.getElementById("user-input");
-        const sendBtn = document.getElementById("send-btn");
+    <main class="portal-layout">
+        <aside class="support-info">
+            <div class="info-card">
+                <h2>Welcome to IT Support</h2>
+                <p>
+                    Describe your issue in the chat window. ChatterRax will attempt to resolve your
+                    problem immediately or automatically generate a categorized ticket for the admin team.
+                </p>
+                <ul class="status-list">
+                    <li>System Status <span class="status-badge">Operational</span></li>
+                    <li>Average Wait Time <span>&lt; 1 min</span></li>
+                </ul>
+            </div>
 
-        function addMessage(text, sender) {
-            const msg = document.createElement("div");
-            msg.classList.add("message");
-            msg.classList.add(sender === "user" ? "user-message" : "bot-message");
-            msg.textContent = text;
-            chatBox.appendChild(msg);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
+            <div class="info-card timeline-card">
+                <h3>Process Flow</h3>
+                <p>
+                    1. Describe Issue -> 2. Automated Triage -> 3. Ticket Generation -> 4. Admin Resolution
+                </p>
+            </div>
+        </aside>
 
-        async function sendMessage() {
-            const message = userInput.value.trim();
-            if (!message) return;
+        <section class="chat-shell">
+            <div class="chat-header">
+                <div class="chat-header-info">
+                    <h3>Virtual Service Desk</h3>
+                    <p>Connected to secure SQL ticket storage</p>
+                </div>
+                <div class="assistant-status">Online</div>
+            </div>
 
-            addMessage(message, "user");
-            userInput.value = "";
+            <div id="chat-box">
+                <div class="message bot-message">
+                    Hello! I am the ChatterRax intake assistant. Please describe the issue you are experiencing, and I will help you get a ticket opened.
+                </div>
+            </div>
 
-            try {
-                const response = await fetch("/chat", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ message: message, user_id: 1 })
-                });
+            <div id="input-area">
+                <input
+                    type="text"
+                    id="user-input"
+                    placeholder="Type your issue here..."
+                    autocomplete="off"
+                />
+                <button id="send-btn">Send</button>
+            </div>
+        </section>
+    </main>
 
-                const data = await response.json();
-                addMessage(data.reply, "bot");
-
-                if (!data.resolved) {
-                    addMessage("A ticket has been created and an admin will follow up shortly.", "bot");
-                }
-
-            } catch (error) {
-                addMessage("Something went wrong. Please try again.", "bot");
-            }
-        }
-
-        sendBtn.addEventListener("click", sendMessage);
-
-        userInput.addEventListener("keypress", function(e) {
-            if (e.key === "Enter") sendMessage();
-        });
-    </script>
+    <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
 </body>
 </html>
-```
