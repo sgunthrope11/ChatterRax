@@ -1,5 +1,9 @@
-from db_service import create_ticket, create_chat_session, save_chat_message
-from connection import get_connection
+try:
+    from db_service import create_ticket, create_chat_session, link_ticket_to_session, save_chat_message
+    from connection import get_connection
+except ModuleNotFoundError:
+    from .db_service import create_ticket, create_chat_session, link_ticket_to_session, save_chat_message
+    from .connection import get_connection
 from datetime import datetime
 
 # =========================
@@ -171,119 +175,129 @@ def validate_user_exists(user_id):
         if conn:
             conn.close()
 
-# =========================
-# Start log session
-# =========================
-write_log("=" * 60)
-write_log("TEST SESSION STARTED")
-write_log("=" * 60)
+def main():
+    # =========================
+    # Start log session
+    # =========================
+    write_log("=" * 60)
+    write_log("TEST SESSION STARTED")
+    write_log("=" * 60)
 
-# =========================
-# Get or create seed users
-# =========================
-test_user_id = get_or_create_test_user()
+    # =========================
+    # Get or create seed users
+    # =========================
+    test_user_id = get_or_create_test_user()
 
-if not test_user_id:
-    write_log("Could not get or create test user. Stopping test.")
-    exit()
+    if not test_user_id:
+        write_log("Could not get or create test user. Stopping test.")
+        return
 
-# =========================
-# Validate user exists
-# =========================
-if not validate_user_exists(test_user_id):
-    write_log("User validation failed. Stopping test.")
-    exit()
+    # =========================
+    # Validate user exists
+    # =========================
+    if not validate_user_exists(test_user_id):
+        write_log("User validation failed. Stopping test.")
+        return
 
-# =========================
-# Test create_ticket
-# =========================
-write_log("\nTesting create_ticket:")
+    # =========================
+    # Test create_ticket
+    # =========================
+    write_log("\nTesting create_ticket:")
 
-ticket_id = create_ticket(
-    user_id=test_user_id,
-    description="Cannot login to account",
-    priority="high"
-)
-
-if ticket_id:
-    write_log(f"Created TicketID: {ticket_id}")
-else:
-    write_log("Ticket creation failed")
-
-# =========================
-# Test create_chat_session
-# =========================
-write_log("\nTesting create_chat_session:")
-
-session_id = create_chat_session(
-    user_id=test_user_id,
-    ticket_id=ticket_id
-)
-
-if session_id:
-    write_log(f"Created SessionID: {session_id}")
-else:
-    write_log("Session creation failed")
-
-# =========================
-# Test save_chat_message
-# =========================
-write_log("\nTesting save_chat_message:")
-
-if session_id:
-    result1 = save_chat_message(session_id, "user", "I cannot log into my account.")
-    result2 = save_chat_message(session_id, "bot", "Have you tried resetting your password?")
-    result3 = save_chat_message(session_id, "user", "Yes I tried but the reset link is not working.")
-    result4 = save_chat_message(session_id, "bot", "Please clear your cache and try again.")
-
-    if result1 and result2 and result3 and result4:
-        write_log("All chat messages saved successfully.")
-    else:
-        write_log("One or more messages failed to save.")
-
-# =========================
-# Test a session without
-# a ticket - unresolved
-# =========================
-write_log("\nTesting unresolved session with no ticket:")
-
-unresolved_session_id = create_chat_session(
-    user_id=test_user_id,
-    ticket_id=None
-)
-
-if unresolved_session_id:
-    write_log(f"Created unresolved SessionID: {unresolved_session_id}")
-    save_chat_message(unresolved_session_id, "user", "I need help with something unusual.")
-    save_chat_message(unresolved_session_id, "bot", "I was not able to resolve your issue, creating a ticket for an admin.")
-    write_log("Unresolved session messages saved.")
-
-    # Now create the ticket for the unresolved session
-    unresolved_ticket_id = create_ticket(
+    ticket_id = create_ticket(
         user_id=test_user_id,
-        description="I need help with something unusual.",
-        priority="low"
+        description="Cannot login to account",
+        priority="high"
     )
-    write_log(f"Ticket created for unresolved session: TicketID {unresolved_ticket_id}")
 
-# =========================
-# Test invalid inputs
-# =========================
-write_log("\nTesting invalid inputs:")
-save_chat_message(session_id, "admin", "This should fail - invalid sender")
-save_chat_message(session_id, "user", "")
-save_chat_message(session_id, "user", "   ")
+    if ticket_id:
+        write_log(f"Created TicketID: {ticket_id}")
+    else:
+        write_log("Ticket creation failed")
 
-# =========================
-# Show all tables in
-# one single connection
-# =========================
-write_log("\nFetching all database records:")
-show_all_tables()
+    # =========================
+    # Test create_chat_session
+    # =========================
+    write_log("\nTesting create_chat_session:")
 
-# =========================
-# End log session
-# =========================
-write_log("\n" + "=" * 60)
-write_log("TEST SESSION ENDED")
-write_log("=" * 60 + "\n")
+    session_id = create_chat_session(
+        user_id=test_user_id,
+        ticket_id=ticket_id
+    )
+
+    if session_id:
+        write_log(f"Created SessionID: {session_id}")
+    else:
+        write_log("Session creation failed")
+
+    # =========================
+    # Test save_chat_message
+    # =========================
+    write_log("\nTesting save_chat_message:")
+
+    if session_id:
+        result1 = save_chat_message(session_id, "user", "I cannot log into my account.")
+        result2 = save_chat_message(session_id, "bot", "Have you tried resetting your password?")
+        result3 = save_chat_message(session_id, "user", "Yes I tried but the reset link is not working.")
+        result4 = save_chat_message(session_id, "bot", "Please clear your cache and try again.")
+
+        if result1 and result2 and result3 and result4:
+            write_log("All chat messages saved successfully.")
+        else:
+            write_log("One or more messages failed to save.")
+
+    # =========================
+    # Test a session without
+    # a ticket - unresolved
+    # =========================
+    write_log("\nTesting unresolved session with no ticket:")
+
+    unresolved_session_id = create_chat_session(
+        user_id=test_user_id,
+        ticket_id=None
+    )
+
+    if unresolved_session_id:
+        write_log(f"Created unresolved SessionID: {unresolved_session_id}")
+        save_chat_message(unresolved_session_id, "user", "I need help with something unusual.")
+        save_chat_message(unresolved_session_id, "bot", "I was not able to resolve your issue, creating a ticket for an admin.")
+        write_log("Unresolved session messages saved.")
+
+        unresolved_ticket_id = create_ticket(
+            user_id=test_user_id,
+            description="I need help with something unusual.",
+            priority="low"
+        )
+        write_log(f"Ticket created for unresolved session: TicketID {unresolved_ticket_id}")
+
+        if unresolved_ticket_id and link_ticket_to_session(unresolved_session_id, unresolved_ticket_id):
+            write_log(f"Linked SessionID {unresolved_session_id} to TicketID {unresolved_ticket_id}")
+        else:
+            write_log("Failed to link unresolved session to its ticket.")
+
+    # =========================
+    # Test invalid inputs
+    # =========================
+    write_log("\nTesting invalid inputs:")
+    if session_id:
+        save_chat_message(session_id, "admin", "This should fail - invalid sender")
+        save_chat_message(session_id, "user", "")
+        save_chat_message(session_id, "user", "   ")
+
+    # =========================
+    # Show all tables in
+    # one single connection
+    # =========================
+    write_log("\nFetching all database records:")
+    show_all_tables()
+
+    # =========================
+    # End log session
+    # =========================
+    write_log("\n" + "=" * 60)
+    write_log("TEST SESSION ENDED")
+    write_log("=" * 60 + "\n")
+
+
+if __name__ == "__main__":
+    main()
