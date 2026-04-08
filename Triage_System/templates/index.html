@@ -47,29 +47,67 @@
         </aside>
 
         <section class="chat-shell">
-            <div class="chat-header">
-                <div class="chat-header-info">
-                    <h3>Virtual Service Desk</h3>
-                    <p>Connected to secure SQL ticket storage</p>
+            <section id="intake-screen" class="intake-screen" aria-label="User details">
+                <div class="intake-screen-card">
+                    <div class="intake-copy">
+                        <strong>Before we begin</strong>
+                        <p>Enter your contact details and submit them once so we can create or update your support record in SQL before the chat starts.</p>
+                    </div>
+                    <div class="intake-grid">
+                        <input
+                            type="text"
+                            id="profile-name"
+                            class="profile-input"
+                            placeholder="Full name"
+                            autocomplete="name"
+                        />
+                        <input
+                            type="email"
+                            id="profile-email"
+                            class="profile-input"
+                            placeholder="Email address"
+                            autocomplete="email"
+                        />
+                        <input
+                            type="text"
+                            id="profile-department"
+                            class="profile-input"
+                            placeholder="Department"
+                            autocomplete="organization"
+                        />
+                    </div>
+                    <div class="intake-actions">
+                        <button type="button" id="profile-submit-btn" class="profile-submit-btn">Submit Details</button>
+                        <span id="profile-submit-status" class="profile-submit-status" aria-live="polite">Submit your details before starting the chat.</span>
+                    </div>
                 </div>
-                <div class="assistant-status">Online</div>
-            </div>
+            </section>
 
-            <div id="chat-box">
-                <div class="message bot-message">
-                    Hello! I am the ChatterRax intake assistant. Please describe the issue you are experiencing, and I will help you get a ticket opened.
+            <section id="chat-interface" class="chat-interface chat-interface-hidden" aria-label="Chat support">
+                <div class="chat-header">
+                    <div class="chat-header-info">
+                        <h3>Virtual Service Desk</h3>
+                        <p>Connected to secure SQL ticket storage</p>
+                    </div>
+                    <div class="assistant-status">Online</div>
                 </div>
-            </div>
 
-            <div id="input-area">
-                <input
-                    type="text"
-                    id="user-input"
-                    placeholder="Type your issue here..."
-                    autocomplete="off"
-                />
-                <button id="send-btn">Send</button>
-            </div>
+                <div id="chat-box">
+                    <div class="message bot-message">
+                        Hello! I am the ChatterRax intake assistant. My knowledge base is limited to Microsoft consumer products such as Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account issues. Describe the issue you are experiencing and I will guide you or start a ticket if needed.
+                    </div>
+                </div>
+
+                <div id="input-area">
+                    <input
+                        type="text"
+                        id="user-input"
+                        placeholder="Type your issue here..."
+                        autocomplete="off"
+                    />
+                    <button id="send-btn">Send</button>
+                </div>
+            </section>
         </section>
     </main>
 
