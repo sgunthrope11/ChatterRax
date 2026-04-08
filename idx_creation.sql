@@ -1,6 +1,6 @@
--- Index on Username (frequent search/login)
+-- Index on UserName (frequent search/login)
 CREATE NONCLUSTERED INDEX idx_Users_Username
-ON Users (Username);
+ON Users (UserName);
 
 -- =========================
 -- TICKETS TABLE INDEXES
