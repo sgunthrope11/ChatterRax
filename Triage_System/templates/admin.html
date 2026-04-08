@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ChatterRax Admin</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/chatterrax-favicon.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/chatterrax.css') }}">
+</head>
+<body class="admin-page">
+<header class="admin-header">
+  <div class="brand-lockup">
+    <div class="brand-mark" aria-hidden="true">CR</div>
+    <div class="brand-copy">
+      <div class="brand-title">ChatterRax Admin</div>
+      <div class="brand-subtitle">Live ticket operations and resolution dashboard</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <a class="nav-link" href="/chatbot">Submit Ticket</a>
+    <a class="nav-link active" href="/admin">Admin Console</a>
+    <button class="refresh-btn" onclick="loadTickets()">Refresh</button>
+  </div>
+</header>
+
+<main class="admin-shell">
+  <section class="admin-intro">
+    <div class="hero-card">
+      <h2>Prioritize queue health and move tickets faster.</h2>
+      <p>
+        Review all active ChatterRax tickets, keep watch on department demand, and update ticket status
+        without leaving the dashboard.
+      </p>
+      <div class="hero-tags">
+        <div class="hero-tag">Open and in-progress queue</div>
+        <div class="hero-tag">Live SQL-backed data</div>
+        <div class="hero-tag">Fast triage updates</div>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <strong>Queue Snapshot</strong>
+      <div class="highlight" id="count-total-hero">-</div>
+      <p>Open and in-progress tickets are shown below with department, priority, and update controls.</p>
+    </div>
+  </section>
+
+  <div id="alert-box" role="alert"></div>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-icon blue">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value" id="count-total">-</div>
+        <div class="stat-label">Total Open</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon red">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value" id="count-high">-</div>
+        <div class="stat-label">High Priority</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon orange">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value" id="count-medium">-</div>
+        <div class="stat-label">Medium Priority</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon green">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value" id="count-low">-</div>
+        <div class="stat-label">Low Priority</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div class="table-header">
+      <div class="table-title">Active Ticket Queue</div>
+      <div class="table-timestamp" id="last-updated">Not yet loaded</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Ticket ID</th>
+          <th>User</th>
+          <th>Department</th>
+          <th>Priority</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="ticket-tbody">
+        <tr class="state-row">
+          <td colspan="7"><span class="spinner"></span>Loading tickets...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>
