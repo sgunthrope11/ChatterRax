@@ -7,9 +7,9 @@ try:
     from bot_logic import handle_message
     from db_service import (
         create_chat_session,
-        create_ticket,
+        create_ticket_for_session,
+        get_or_create_chat_user,
         get_open_tickets,
-        link_ticket_to_session,
         save_chat_message,
         update_ticket_status,
     )
@@ -17,9 +17,9 @@ except ModuleNotFoundError:
     from .bot_logic import handle_message
     from .db_service import (
         create_chat_session,
-        create_ticket,
+        create_ticket_for_session,
+        get_or_create_chat_user,
         get_open_tickets,
-        link_ticket_to_session,
         save_chat_message,
         update_ticket_status,
     )
@@ -28,6 +28,7 @@ except ModuleNotFoundError:
 load_dotenv()
 
 app = Flask(__name__)
+PENDING_TICKET_REQUESTS = {}
 
 
 # =========================
@@ -66,7 +67,10 @@ def chat():
             }), 400
 
         user_message = data.get("message", "").strip()
-        user_id = data.get("user_id", 1)
+        user_data = data.get("user") or {}
+        user_name = str(user_data.get("name", "")).strip()
+        user_email = str(user_data.get("email", "")).strip().lower()
+        user_department = str(user_data.get("department", "")).strip()
 
         if not user_message:
             return jsonify({
@@ -75,6 +79,31 @@ def chat():
                 "ticket_id": None,
                 "error": True
             }), 400
+
+        if not user_name or not user_email or not user_department:
+            return jsonify({
+                "reply": "Please provide your name, email, and department before starting the chat.",
+                "resolved": False,
+                "ticket_id": None,
+                "error": True
+            }), 400
+
+        if "@" not in user_email or user_email.startswith("@") or user_email.endswith("@"):
+            return jsonify({
+                "reply": "Please enter a valid email address before sending your message.",
+                "resolved": False,
+                "ticket_id": None,
+                "error": True
+            }), 400
+
+        user_id = get_or_create_chat_user(user_name, user_email, user_department)
+        if user_id is None:
+            return jsonify({
+                "reply": "We are experiencing technical difficulties. Please try again shortly.",
+                "resolved": False,
+                "ticket_id": None,
+                "error": True
+            }), 500
 
         if not isinstance(user_id, int) or user_id <= 0:
             return jsonify({
@@ -97,32 +126,49 @@ def chat():
         if not user_message_saved:
             print(f"Warning: Failed to save user message for session {session_id}")
 
-        result = handle_message(user_message)
+        pending_ticket_request = PENDING_TICKET_REQUESTS.get(user_email)
+        result = handle_message(
+            user_message,
+            awaiting_ticket_detail=bool(pending_ticket_request),
+        )
 
         bot_message_saved = save_chat_message(session_id, "bot", result["reply"])
         if not bot_message_saved:
             print(f"Warning: Failed to save bot reply for session {session_id}")
 
         ticket_id = None
-        if not result["resolved"]:
-            ticket_id = create_ticket(
+        if result.get("needs_ticket") and result.get("needs_description"):
+            if pending_ticket_request:
+                pending_ticket_request["latest_prompt"] = result["reply"]
+            else:
+                PENDING_TICKET_REQUESTS[user_email] = {
+                    "initial_message": user_message,
+                    "service": result.get("service"),
+                }
+        else:
+            PENDING_TICKET_REQUESTS.pop(user_email, None)
+
+        if result.get("create_ticket"):
+            ticket_description = user_message
+            priority = result.get("priority", "medium").lower()
+
+            if pending_ticket_request:
+                ticket_description = (
+                    f"Initial request: {pending_ticket_request['initial_message']}\n"
+                    f"Additional detail: {user_message}"
+                )
+
+            ticket_id = create_ticket_for_session(
+                session_id=session_id,
                 user_id=user_id,
-                description=user_message,
-                priority="low"
+                description=ticket_description,
+                priority=priority
             )
             if ticket_id is None:
                 return jsonify({
                     "reply": "We are experiencing technical difficulties. Please try again shortly.",
                     "resolved": False,
                     "ticket_id": None,
-                    "error": True
-                }), 500
-
-            if not link_ticket_to_session(session_id, ticket_id):
-                return jsonify({
-                    "reply": "We created your ticket, but could not finish linking the chat session.",
-                    "resolved": False,
-                    "ticket_id": ticket_id,
                     "error": True
                 }), 500
 

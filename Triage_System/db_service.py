@@ -5,6 +5,73 @@ try:
 except ModuleNotFoundError:
     from .connection import get_connection
 
+
+def get_or_create_chat_user(user_name, email, department):
+    """
+    Finds a user by email or creates one if it does not exist yet.
+    Updates the stored name and department when the email already exists.
+    Returns the resolved UserID or None if validation/database work fails.
+    """
+    user_name = str(user_name or "").strip()
+    email = str(email or "").strip().lower()
+    department = str(department or "").strip()
+
+    if not user_name or not email or not department:
+        return None
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT UserID
+            FROM Users
+            WHERE Email = ?
+            """,
+            (email,)
+        )
+        existing_user = cursor.fetchone()
+        if existing_user:
+            user_id = existing_user[0]
+            cursor.execute(
+                """
+                UPDATE Users
+                SET UserName = ?, Department = ?
+                WHERE UserID = ?
+                """,
+                (user_name, department, user_id)
+            )
+            conn.commit()
+            return user_id
+
+        cursor.execute(
+            """
+            INSERT INTO Users (UserName, Email, Department)
+            OUTPUT INSERTED.UserID
+            VALUES (?, ?, ?)
+            """,
+            (user_name, email, department)
+        )
+        user_id = cursor.fetchone()[0]
+        conn.commit()
+        return user_id
+
+    except pyodbc.Error as e:
+        if conn:
+            conn.rollback()
+        print("Error resolving chat user:", e)
+        return None
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 # =========================
 # create_ticket function
 # =========================
@@ -109,6 +176,60 @@ def link_ticket_to_session(session_id, ticket_id):
     except pyodbc.Error as e:
         print("Error linking ticket to chat session:", e)
         return False
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+# =========================
+# create_ticket_for_session function
+# =========================
+def create_ticket_for_session(session_id, user_id, description, priority='low'):
+    """
+    Creates a ticket and links it to an existing session in one transaction.
+    Returns the new TicketID or None if any step fails.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            INSERT INTO Tickets (UserID, Priority, Description)
+            OUTPUT INSERTED.TicketID
+            VALUES (?, ?, ?)
+            """,
+            (user_id, priority, description)
+        )
+        ticket_id = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            UPDATE Chat_Sessions
+            SET TicketID = ?
+            WHERE SessionID = ?
+            """,
+            (ticket_id, session_id)
+        )
+
+        if cursor.rowcount == 0:
+            print(f"No chat session found for SessionID {session_id}.")
+            conn.rollback()
+            return None
+
+        conn.commit()
+        return ticket_id
+
+    except pyodbc.Error as e:
+        if conn:
+            conn.rollback()
+        print("Error creating and linking ticket:", e)
+        return None
 
     finally:
         if cursor:
