@@ -4,33 +4,98 @@ const sendBtn = document.getElementById("send-btn");
 const profileNameInput = document.getElementById("profile-name");
 const profileEmailInput = document.getElementById("profile-email");
 const profileDepartmentInput = document.getElementById("profile-department");
+const profileForm = document.getElementById("profile-form");
 const profileSubmitBtn = document.getElementById("profile-submit-btn");
 const profileSubmitStatus = document.getElementById("profile-submit-status");
-const intakeScreen = document.getElementById("intake-screen");
-const chatInterface = document.getElementById("chat-interface");
-let isSending = false;
+const intakePanel = document.getElementById("intake-panel");
+const chatPanel = document.getElementById("chat-panel");
+const statusBanner = document.getElementById("status-banner");
+const statusBannerText = document.getElementById("status-banner-text");
+const statusBannerDismiss = document.getElementById("status-banner-dismiss");
+
 const PROFILE_STORAGE_KEY = "chatterrax-user-profile";
-const BOT_RESPONSE_DELAY_MS = 12000;
+const CHAT_CLIENT_ID_STORAGE_KEY = "chatterrax-chat-client-id";
+const BOT_RESPONSE_DELAY_MS = 900;
+
+let isSending = false;
 let profileSubmitted = false;
+let statusBannerDismissed = false;
+
+
+function getOrCreateClientSessionId() {
+    let clientId = sessionStorage.getItem(CHAT_CLIENT_ID_STORAGE_KEY);
+    if (clientId) {
+        return clientId;
+    }
+
+    clientId = window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : `chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    sessionStorage.setItem(CHAT_CLIENT_ID_STORAGE_KEY, clientId);
+    return clientId;
+}
+
+
+function createMessageElement(text, sender) {
+    const msg = document.createElement("div");
+    msg.className = sender === "user" ? "chat-msg-user" : "chat-msg-bot";
+    if (sender === "bot") {
+        appendFormattedText(msg, text);
+    } else {
+        msg.textContent = text;
+    }
+    return msg;
+}
+
+
+function appendFormattedText(container, text, linkClass = "chat-link") {
+    const urlPattern = /(https?:\/\/[^\s]+)/g;
+    const parts = String(text || "").split(urlPattern);
+
+    parts.forEach(part => {
+        if (!part) {
+            return;
+        }
+
+        if (/^https?:\/\//.test(part)) {
+            const link = document.createElement("a");
+            link.href = part;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.className = linkClass;
+            link.textContent = part;
+            container.appendChild(link);
+            return;
+        }
+
+        container.appendChild(document.createTextNode(part));
+    });
+}
+
 
 function addMessage(text, sender) {
-    const msg = document.createElement("div");
-    msg.classList.add("message");
-    msg.classList.add(sender === "user" ? "user-message" : "bot-message");
-    msg.textContent = text;
+    const msg = createMessageElement(text, sender);
     chatBox.appendChild(msg);
     chatBox.scrollTop = chatBox.scrollHeight;
+    return msg;
 }
+
 
 function addTypingBubble() {
     const bubble = document.createElement("div");
-    bubble.classList.add("message", "bot-message", "typing-message");
+    bubble.className = "chat-typing-bubble";
     bubble.setAttribute("aria-live", "polite");
-    bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+    bubble.innerHTML = `
+        <div class="chat-typing-dots">
+            <span></span><span></span><span></span>
+        </div>
+    `;
     chatBox.appendChild(bubble);
     chatBox.scrollTop = chatBox.scrollHeight;
     return bubble;
 }
+
 
 function removeTypingBubble(bubble) {
     if (bubble && bubble.parentNode) {
@@ -38,9 +103,11 @@ function removeTypingBubble(bubble) {
     }
 }
 
+
 function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
 
 function readUserProfile() {
     return {
@@ -50,34 +117,89 @@ function readUserProfile() {
     };
 }
 
+
 function saveUserProfile(profile) {
     sessionStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 }
 
+
 function setChatAvailability(isAvailable) {
     userInput.disabled = !isAvailable || isSending;
     sendBtn.disabled = !isAvailable || isSending;
+
+    if (userInput.disabled) {
+        userInput.classList.add("bg-slate-100", "text-slate-400", "cursor-not-allowed");
+    } else {
+        userInput.classList.remove("bg-slate-100", "text-slate-400", "cursor-not-allowed");
+    }
 }
 
+
 function updateScreenState() {
-    intakeScreen.classList.toggle("intake-screen-hidden", profileSubmitted);
-    chatInterface.classList.toggle("chat-interface-hidden", !profileSubmitted);
+    intakePanel.classList.toggle("hidden", profileSubmitted);
+    chatPanel.classList.toggle("hidden", !profileSubmitted);
 }
+
+
+function hideStatusBanner() {
+    statusBanner.classList.add("hidden");
+    statusBanner.style.display = "";
+}
+
+
+function showStatusBanner(message) {
+    statusBannerText.textContent = "";
+    appendFormattedText(
+        statusBannerText,
+        message || "Microsoft is reporting a service issue right now. This may affect your support request.",
+        "status-banner-link"
+    );
+    statusBanner.classList.remove("hidden");
+    statusBanner.style.display = "flex";
+}
+
+
+async function refreshStatusBanner(service = "") {
+    if (statusBannerDismissed) {
+        return;
+    }
+
+    try {
+        const query = service ? `?service=${encodeURIComponent(service)}` : "";
+        const response = await fetch(`/status${query}`);
+        const payload = await response.json();
+
+        if (!response.ok || payload.error || !payload.issue_found) {
+            hideStatusBanner();
+            return;
+        }
+
+        showStatusBanner(payload.summary || "Microsoft is reporting a service issue right now. This may affect your support request.");
+    } catch (error) {
+        hideStatusBanner();
+    }
+}
+
 
 function setProfileSubmittedState(isSubmitted, statusMessage) {
     profileSubmitted = isSubmitted;
-    profileSubmitBtn.textContent = isSubmitted ? "Details Saved" : "Submit Details";
+    profileSubmitBtn.textContent = isSubmitted ? "Details Saved" : "Start Chat";
     profileSubmitBtn.disabled = isSubmitted;
     profileSubmitStatus.textContent = statusMessage;
+    profileSubmitStatus.className = isSubmitted
+        ? "text-xs text-center text-emerald-600 mt-4"
+        : "text-xs text-center text-slate-400 mt-4";
     setChatAvailability(isSubmitted);
     updateScreenState();
 }
 
+
 function loadSavedProfile() {
     try {
+        getOrCreateClientSessionId();
         const saved = sessionStorage.getItem(PROFILE_STORAGE_KEY);
         if (!saved) {
-            setProfileSubmittedState(false, "Submit your details before starting the chat.");
+            setProfileSubmittedState(false, "Your data is securely logged for internal follow-up.");
             return;
         }
 
@@ -85,18 +207,22 @@ function loadSavedProfile() {
         profileNameInput.value = profile.name || "";
         profileEmailInput.value = profile.email || "";
         profileDepartmentInput.value = profile.department || "";
-        setProfileSubmittedState(true, "Details saved. You can start chatting.");
+        setProfileSubmittedState(true, "Details saved. Your support session is ready.");
+        statusBannerDismissed = false;
     } catch (error) {
         sessionStorage.removeItem(PROFILE_STORAGE_KEY);
-        setProfileSubmittedState(false, "Submit your details before starting the chat.");
+        setProfileSubmittedState(false, "Your data is securely logged for internal follow-up.");
     }
 }
+
 
 function getValidatedUserProfile() {
     const profile = readUserProfile();
 
     if (!profile.name || !profile.email || !profile.department) {
-        addMessage("Please enter your name, email, and department before sending a message.", "bot");
+        profileSubmitStatus.textContent = "Please enter your name, email, and department before starting the chat.";
+        profileSubmitStatus.className = "text-xs text-center text-rose-600 mt-4";
+
         if (!profile.name) {
             profileNameInput.focus();
         } else if (!profile.email) {
@@ -109,7 +235,8 @@ function getValidatedUserProfile() {
 
     const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email);
     if (!emailLooksValid) {
-        addMessage("Please enter a valid email address before sending a message.", "bot");
+        profileSubmitStatus.textContent = "Please enter a valid email address before starting the chat.";
+        profileSubmitStatus.className = "text-xs text-center text-rose-600 mt-4";
         profileEmailInput.focus();
         return null;
     }
@@ -118,24 +245,28 @@ function getValidatedUserProfile() {
     return profile;
 }
 
+
 function submitUserProfile() {
     const profile = getValidatedUserProfile();
     if (!profile) {
         return null;
     }
 
-    setProfileSubmittedState(true, "Details saved. You can start chatting.");
+    setProfileSubmittedState(true, "Details saved. Your support session is ready.");
+    statusBannerDismissed = false;
     userInput.focus();
     return profile;
 }
+
 
 function markProfileAsEdited() {
     if (!profileSubmitted) {
         return;
     }
 
-    setProfileSubmittedState(false, "Your details changed. Please submit them again before chatting.");
+    setProfileSubmittedState(false, "Your details changed. Submit them again before chatting.");
 }
+
 
 async function sendMessage() {
     const message = userInput.value.trim();
@@ -144,12 +275,14 @@ async function sendMessage() {
     }
 
     if (!profileSubmitted) {
-        addMessage("Please submit your name, email, and department before sending a message.", "bot");
+        profileSubmitStatus.textContent = "Please submit your details before sending a message.";
+        profileSubmitStatus.className = "text-xs text-center text-rose-600 mt-4";
         profileSubmitBtn.focus();
         return;
     }
 
     const userProfile = readUserProfile();
+    const clientSessionId = getOrCreateClientSessionId();
 
     isSending = true;
     setChatAvailability(true);
@@ -165,7 +298,8 @@ async function sendMessage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 message: message,
-                user: userProfile
+                user: userProfile,
+                client_session_id: clientSessionId
             })
         });
 
@@ -184,6 +318,13 @@ async function sendMessage() {
             botReply += ` Ticket #${data.ticket_id} has been created for the admin team.`;
         }
         addMessage(botReply, "bot");
+
+        if (data.status_checked && data.status_summary) {
+            statusBannerDismissed = false;
+            showStatusBanner(data.status_summary);
+        } else {
+            await refreshStatusBanner(data.service || "");
+        }
     } catch (error) {
         const elapsed = Date.now() - startedAt;
         const remainingDelay = Math.max(0, BOT_RESPONSE_DELAY_MS - elapsed);
@@ -197,11 +338,22 @@ async function sendMessage() {
     }
 }
 
+
 loadSavedProfile();
-profileSubmitBtn.addEventListener("click", submitUserProfile);
+
+profileForm.addEventListener("submit", function(event) {
+    event.preventDefault();
+    submitUserProfile();
+});
+
 profileNameInput.addEventListener("input", markProfileAsEdited);
 profileEmailInput.addEventListener("input", markProfileAsEdited);
 profileDepartmentInput.addEventListener("input", markProfileAsEdited);
+statusBannerDismiss.addEventListener("click", function() {
+    statusBannerDismissed = true;
+    hideStatusBanner();
+});
+
 sendBtn.addEventListener("click", sendMessage);
 userInput.addEventListener("keydown", function(event) {
     if (event.key === "Enter") {

@@ -1,8 +1,29 @@
 const STATUS_OPTIONS = ["Open", "In Progress", "Resolved", "Closed"];
 
+function setLastUpdatedState(message, tone = "idle") {
+    const badgeColorMap = {
+        idle: "bg-slate-400",
+        success: "bg-emerald-500",
+        error: "bg-rose-500"
+    };
+    const badgeColor = badgeColorMap[tone] || badgeColorMap.idle;
+
+    document.getElementById("last-updated").innerHTML =
+        `<span class="h-2 w-2 rounded-full ${badgeColor}"></span><span>${esc(message)}</span>`;
+}
+
+function resetStats() {
+    document.getElementById("count-total").textContent = "0";
+    document.getElementById("count-total-hero").textContent = "0 active";
+    document.getElementById("count-high").textContent = "0";
+    document.getElementById("count-medium").textContent = "0";
+    document.getElementById("count-low").textContent = "0";
+}
+
 async function loadTickets() {
     const tbody = document.getElementById("ticket-tbody");
     tbody.innerHTML = '<tr class="state-row"><td colspan="7"><span class="spinner"></span>Loading tickets...</td></tr>';
+    setLastUpdatedState("Refreshing queue...", "idle");
 
     try {
         const response = await fetch("/tickets");
@@ -15,9 +36,11 @@ async function loadTickets() {
         const tickets = payload.tickets || [];
         renderTable(tickets);
         updateStats(tickets);
-        document.getElementById("last-updated").textContent = "Last updated: " + new Date().toLocaleTimeString();
+        setLastUpdatedState(`Last updated: ${new Date().toLocaleTimeString()}`, "success");
     } catch (error) {
+        resetStats();
         tbody.innerHTML = `<tr class="state-row"><td colspan="7">Failed to load tickets: ${esc(error.message)}</td></tr>`;
+        setLastUpdatedState("Unable to refresh queue", "error");
     }
 }
 
@@ -56,7 +79,16 @@ function renderTable(tickets) {
 
 async function updateTicket(ticketId) {
     const select = document.getElementById(`sel-${ticketId}`);
-    const button = select.closest(".actions-cell").querySelector(".update-btn");
+    if (!select) {
+        showAlert(`Could not find ticket #${ticketId} in the table.`, "error");
+        return;
+    }
+    const actionsCell = select.closest(".actions-cell");
+    const button = actionsCell ? actionsCell.querySelector(".update-btn") : null;
+    if (!button) {
+        showAlert("Could not find the update button for this ticket.", "error");
+        return;
+    }
     const newStatus = select.value;
 
     button.disabled = true;
@@ -97,7 +129,7 @@ let alertTimer;
 function showAlert(message, type) {
     const box = document.getElementById("alert-box");
     box.textContent = message;
-    box.className = type;
+    box.className = `mb-6 rounded-lg p-4 text-sm font-medium ${type === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`;
     box.style.display = "block";
     clearTimeout(alertTimer);
     alertTimer = setTimeout(() => {

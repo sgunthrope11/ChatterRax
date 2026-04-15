@@ -73,42 +73,6 @@ def get_or_create_chat_user(user_name, email, department):
 
 
 # =========================
-# create_ticket function
-# =========================
-def create_ticket(user_id, description, priority='low'):
-    """
-    Creates a new ticket in the Tickets table.
-    Returns the new TicketID or None if it fails.
-    """
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        query = """
-        INSERT INTO Tickets (UserID, Priority, Description)
-        OUTPUT INSERTED.TicketID
-        VALUES (?, ?, ?)
-        """
-
-        cursor.execute(query, (user_id, priority, description))
-        ticket_id = cursor.fetchone()[0]
-        conn.commit()
-        return ticket_id
-
-    except pyodbc.Error as e:
-        print("Error creating ticket:", e)
-        return None
-
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
-# =========================
 # create_chat_session function
 # =========================
 def create_chat_session(user_id, ticket_id=None):
@@ -134,48 +98,10 @@ def create_chat_session(user_id, ticket_id=None):
         return session_id
 
     except pyodbc.Error as e:
+        if conn:
+            conn.rollback()
         print("Error creating chat session:", e)
         return None
-
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-
-# =========================
-# link_ticket_to_session function
-# =========================
-def link_ticket_to_session(session_id, ticket_id):
-    """
-    Links an existing ticket to an existing chat session.
-    Returns True if successful, False if it fails or no row is updated.
-    """
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        query = """
-        UPDATE Chat_Sessions
-        SET TicketID = ?
-        WHERE SessionID = ?
-        """
-
-        cursor.execute(query, (ticket_id, session_id))
-        if cursor.rowcount == 0:
-            print(f"No chat session found for SessionID {session_id}.")
-            conn.rollback()
-            return False
-
-        conn.commit()
-        return True
-
-    except pyodbc.Error as e:
-        print("Error linking ticket to chat session:", e)
-        return False
 
     finally:
         if cursor:
@@ -357,6 +283,8 @@ def update_ticket_status(ticket_id, new_status):
         return "updated"
 
     except pyodbc.Error as e:
+        if conn:
+            conn.rollback()
         print("Error updating ticket status:", e)
         return "error"
 

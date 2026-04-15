@@ -1,4 +1,5 @@
 import os
+import threading
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, url_for
@@ -13,6 +14,7 @@ try:
         save_chat_message,
         update_ticket_status,
     )
+    from status_provider import check_microsoft_public_status
 except ModuleNotFoundError:
     from .bot_logic import handle_message
     from .db_service import (
@@ -23,12 +25,33 @@ except ModuleNotFoundError:
         save_chat_message,
         update_ticket_status,
     )
+    from .status_provider import check_microsoft_public_status
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 PENDING_TICKET_REQUESTS = {}
+CONVERSATION_HISTORY = {}
+ACTIVE_SESSIONS = {}        # keyed by conversation key; reused within one browser tab/session
+MAX_HISTORY_TURNS = 6
+_STATE_LOCK = threading.Lock()
+
+
+def _conversation_key(user_email, client_session_id=None):
+    if client_session_id:
+        return f"{user_email}::{client_session_id}"
+    return user_email
+
+
+def _append_conversation_turn(conversation_key, sender, message_text):
+    with _STATE_LOCK:
+        history = CONVERSATION_HISTORY.setdefault(conversation_key, [])
+        history.append({
+            "sender": sender,
+            "message": str(message_text or "").strip(),
+        })
+        CONVERSATION_HISTORY[conversation_key] = history[-MAX_HISTORY_TURNS:]
 
 
 # =========================
@@ -47,6 +70,24 @@ def chatbot_page():
 @app.route("/admin")
 def admin_page():
     return render_template("admin.html")
+
+
+@app.route("/status", methods=["GET"])
+def status():
+    try:
+        service_name = str(request.args.get("service", "")).strip() or None
+        status_result = check_microsoft_public_status(service_name=service_name)
+        return jsonify(status_result)
+    except Exception as e:
+        print(f"Unexpected error in /status route: {e}")
+        return jsonify({
+            "issue_found": False,
+            "summary": "Unable to retrieve Microsoft public status right now.",
+            "service": request.args.get("service") or "microsoft 365",
+            "status_available": False,
+            "stale": False,
+            "error": True
+        }), 500
 
 
 # =========================
@@ -71,6 +112,7 @@ def chat():
         user_name = str(user_data.get("name", "")).strip()
         user_email = str(user_data.get("email", "")).strip().lower()
         user_department = str(user_data.get("department", "")).strip()
+        client_session_id = str(data.get("client_session_id", "")).strip()
 
         if not user_message:
             return jsonify({
@@ -96,6 +138,8 @@ def chat():
                 "error": True
             }), 400
 
+        conversation_key = _conversation_key(user_email, client_session_id)
+
         user_id = get_or_create_chat_user(user_name, user_email, user_department)
         if user_id is None:
             return jsonify({
@@ -113,40 +157,53 @@ def chat():
                 "error": True
             }), 400
 
-        session_id = create_chat_session(user_id, ticket_id=None)
-        if session_id is None:
-            return jsonify({
-                "reply": "We are experiencing technical difficulties. Please try again shortly.",
-                "resolved": False,
-                "ticket_id": None,
-                "error": True
-            }), 500
+        with _STATE_LOCK:
+            session_id = ACTIVE_SESSIONS.get(conversation_key)
+        if not session_id:
+            session_id = create_chat_session(user_id, ticket_id=None)
+            if session_id is None:
+                return jsonify({
+                    "reply": "We are experiencing technical difficulties. Please try again shortly.",
+                    "resolved": False,
+                    "ticket_id": None,
+                    "error": True
+                }), 500
+            with _STATE_LOCK:
+                ACTIVE_SESSIONS[conversation_key] = session_id
 
         user_message_saved = save_chat_message(session_id, "user", user_message)
         if not user_message_saved:
             print(f"Warning: Failed to save user message for session {session_id}")
 
-        pending_ticket_request = PENDING_TICKET_REQUESTS.get(user_email)
+        with _STATE_LOCK:
+            pending_ticket_request = PENDING_TICKET_REQUESTS.get(conversation_key)
+            conversation_history = CONVERSATION_HISTORY.get(conversation_key, [])[-MAX_HISTORY_TURNS:]
         result = handle_message(
             user_message,
             awaiting_ticket_detail=bool(pending_ticket_request),
+            conversation_history=conversation_history,
         )
 
         bot_message_saved = save_chat_message(session_id, "bot", result["reply"])
         if not bot_message_saved:
             print(f"Warning: Failed to save bot reply for session {session_id}")
 
+        _append_conversation_turn(conversation_key, "user", user_message)
+        _append_conversation_turn(conversation_key, "bot", result["reply"])
+
         ticket_id = None
         if result.get("needs_ticket") and result.get("needs_description"):
             if pending_ticket_request:
                 pending_ticket_request["latest_prompt"] = result["reply"]
             else:
-                PENDING_TICKET_REQUESTS[user_email] = {
-                    "initial_message": user_message,
-                    "service": result.get("service"),
-                }
+                with _STATE_LOCK:
+                    PENDING_TICKET_REQUESTS[conversation_key] = {
+                        "initial_message": user_message,
+                        "service": result.get("service"),
+                    }
         else:
-            PENDING_TICKET_REQUESTS.pop(user_email, None)
+            with _STATE_LOCK:
+                PENDING_TICKET_REQUESTS.pop(conversation_key, None)
 
         if result.get("create_ticket"):
             ticket_description = user_message
@@ -173,11 +230,19 @@ def chat():
                 }), 500
 
             print(f"Ticket created: #{ticket_id}")
+            with _STATE_LOCK:
+                PENDING_TICKET_REQUESTS.pop(conversation_key, None)
+                CONVERSATION_HISTORY.pop(conversation_key, None)
+                ACTIVE_SESSIONS.pop(conversation_key, None)
 
         return jsonify({
             "reply": result["reply"],
             "resolved": result["resolved"],
             "ticket_id": ticket_id,
+            "service": result.get("service"),
+            "detected_services": result.get("detected_services", []),
+            "status_checked": result.get("status_checked", False),
+            "status_summary": result.get("status_summary", ""),
             "error": False
         })
 

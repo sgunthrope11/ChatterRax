@@ -13,16 +13,22 @@ def _bool_setting(name, default):
 
 def _driver_candidates():
     configured_driver = os.environ.get("DB_DRIVER")
-    if configured_driver:
-        return [configured_driver]
-
     installed = set(pyodbc.drivers())
     preferred = [
         "ODBC Driver 18 for SQL Server",
         "ODBC Driver 17 for SQL Server",
         "SQL Server",
     ]
-    return [driver for driver in preferred if driver in installed]
+
+    candidates = []
+    if configured_driver:
+        candidates.append(configured_driver)
+
+    for driver in preferred:
+        if driver in installed and driver not in candidates:
+            candidates.append(driver)
+
+    return candidates
 
 
 def _server_candidates():
