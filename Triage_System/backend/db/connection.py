@@ -1,9 +1,10 @@
 import os
+from pathlib import Path
 
 import pyodbc
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 
 def _bool_setting(name, default):
@@ -13,21 +14,31 @@ def _bool_setting(name, default):
 
 def _driver_candidates():
     configured_driver = os.environ.get("DB_DRIVER")
-    if configured_driver:
-        return [configured_driver]
-
     installed = set(pyodbc.drivers())
     preferred = [
         "ODBC Driver 18 for SQL Server",
         "ODBC Driver 17 for SQL Server",
         "SQL Server",
     ]
-    return [driver for driver in preferred if driver in installed]
+
+    candidates = []
+    if configured_driver:
+        candidates.append(configured_driver)
+
+    for driver in preferred:
+        if driver in installed and driver not in candidates:
+            candidates.append(driver)
+
+    return candidates
 
 
 def _server_candidates():
     base_server = os.environ.get("DB_SERVER", "localhost").strip()
     machine_name = os.environ.get("COMPUTERNAME", "").strip()
+    include_fallbacks = _bool_setting("DB_TRY_FALLBACK_SERVERS", False)
+
+    if not include_fallbacks:
+        return [base_server] if base_server else ["localhost"]
 
     candidates = [
         base_server,
@@ -82,13 +93,14 @@ def _build_connection_string(driver, server):
 def _connection_attempts():
     database = os.environ.get("DB_NAME", "Chatbot_Ticketing_SYS")
     timeout = os.environ.get("DB_TIMEOUT", "5")
+    base_server = os.environ.get("DB_SERVER", "localhost")
 
     # Try a strict local-only Shared Memory path first.
     for driver in _driver_candidates():
         if driver == "SQL Server":
             shared_memory = (
                 f"DRIVER={{{driver}}};"
-                f"SERVER={os.environ.get('DB_SERVER', 'localhost')};"
+                f"SERVER={base_server};"
                 f"DATABASE={database};"
                 "Trusted_Connection=yes;"
                 "Network=dbmslpcn;"
@@ -97,7 +109,7 @@ def _connection_attempts():
         else:
             shared_memory = (
                 f"DRIVER={{{driver}}};"
-                f"SERVER={os.environ.get('DB_SERVER', 'localhost')};"
+                f"SERVER={base_server};"
                 f"DATABASE={database};"
                 "Trusted_Connection=yes;"
                 "Network=dbmslpcn;"
@@ -105,21 +117,29 @@ def _connection_attempts():
                 f"TrustServerCertificate={'yes' if _bool_setting('DB_TRUST_SERVER_CERTIFICATE', True) else 'no'};"
                 f"Connection Timeout={timeout};"
             )
-        yield driver, f"{os.environ.get('DB_SERVER', 'localhost')} [shared-memory]", shared_memory
+        yield driver, f"{base_server} [shared-memory]", shared_memory
 
     for driver in _driver_candidates():
         for server in _server_candidates():
             yield driver, server, _build_connection_string(driver, server)
 
 
-def get_connection():
+def _connect_first_success():
     errors = []
 
     for driver, server, connection_string in _connection_attempts():
         try:
-            return pyodbc.connect(connection_string)
+            return pyodbc.connect(connection_string), driver, server, errors
         except pyodbc.Error as error:
             errors.append(f"{driver} @ {server}: {error}")
+
+    return None, None, None, errors
+
+
+def get_connection():
+    conn, _, _, errors = _connect_first_success()
+    if conn is not None:
+        return conn
 
     raise pyodbc.Error(
         "Unable to connect to SQL Server.\n"
@@ -144,21 +164,15 @@ def test_connection():
     )
 
     try:
-        conn = None
-        selected_driver = "unknown"
-        selected_server = "unknown"
-
-        for driver, server, connection_string in _connection_attempts():
-            try:
-                conn = pyodbc.connect(connection_string)
-                selected_driver = driver
-                selected_server = server
-                break
-            except pyodbc.Error:
-                continue
-
+        conn, selected_driver, selected_server, errors = _connect_first_success()
         if conn is None:
-            conn = get_connection()
+            raise pyodbc.Error(
+                "Unable to connect to SQL Server.\n"
+                f"Servers tried: {', '.join(_server_candidates())}\n"
+                f"Drivers tried: {', '.join(_driver_candidates()) or 'none'}\n"
+                f"Database: {os.environ.get('DB_NAME', 'Chatbot_Ticketing_SYS')}\n"
+                f"Details:\n" + "\n".join(errors)
+            )
 
         cursor = conn.cursor()
         cursor.execute("SELECT @@SERVERNAME, DB_NAME()")
