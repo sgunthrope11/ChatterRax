@@ -937,6 +937,77 @@ select.status-select {
     word-break: break-word;
 }
 
+.chat-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.1rem;
+}
+
+.chat-panel-title {
+    margin: 0 0 0.35rem;
+}
+
+.chat-panel-subtitle {
+    margin: 0;
+}
+
+#chat-panel #chat-box {
+    height: 22rem;
+    overflow-y: auto;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background:
+        radial-gradient(circle at top right, rgba(255, 121, 0, 0.08), transparent 34%),
+        linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.chat-welcome-bubble {
+    align-self: flex-start;
+    margin-right: auto;
+    text-align: left;
+    width: auto;
+}
+
+.chat-composer {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.chat-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+}
+
+.chat-quick-action {
+    border: 1px solid #fed7aa;
+    background: #fff7ed;
+    color: #9a3412;
+    border-radius: 999px;
+    padding: 0.4rem 0.8rem;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+
+.chat-quick-action:hover {
+    background: #ffedd5;
+    border-color: #fb923c;
+    transform: translateY(-1px);
+}
+
 .chat-typing-bubble {
     max-width: 85%;
     border-radius: 1rem 1rem 1rem 0.25rem;
@@ -976,16 +1047,6 @@ select.status-select {
 
 .chat-link:hover { color: #E56C00; }
 
-.status-banner-link {
-    color: #b45309;
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-}
-
-.status-banner-link:hover {
-    color: #92400e;
-}
 
 /* ── Landing page (index) ── */
 
@@ -1251,6 +1312,18 @@ select.status-select {
 @media (max-width: 640px) {
     .landing-card { padding: 1.5rem; }
     .landing-main { padding: 2rem 1rem; }
+
+    .chat-panel-header,
+    .chat-composer {
+        flex-direction: column;
+    }
+
+    .chat-msg-user,
+    .chat-msg-bot,
+    .chat-welcome-bubble,
+    .chat-typing-bubble {
+        max-width: 100%;
+    }
 }
 
 @keyframes fadeIn {

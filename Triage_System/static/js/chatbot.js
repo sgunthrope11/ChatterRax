@@ -9,17 +9,34 @@ const profileSubmitBtn = document.getElementById("profile-submit-btn");
 const profileSubmitStatus = document.getElementById("profile-submit-status");
 const intakePanel = document.getElementById("intake-panel");
 const chatPanel = document.getElementById("chat-panel");
-const statusBanner = document.getElementById("status-banner");
-const statusBannerText = document.getElementById("status-banner-text");
-const statusBannerDismiss = document.getElementById("status-banner-dismiss");
-
+const welcomeMessage = document.getElementById("chat-welcome-message");
 const PROFILE_STORAGE_KEY = "chatterrax-user-profile";
 const CHAT_CLIENT_ID_STORAGE_KEY = "chatterrax-chat-client-id";
 const BOT_RESPONSE_DELAY_MS = 900;
 
 let isSending = false;
 let profileSubmitted = false;
-let statusBannerDismissed = false;
+
+
+function buildWelcomeMessage(profile = {}) {
+    const providedName = String(profile.name || "").trim();
+    const introName = providedName ? ` ${providedName},` : "!";
+    return `Hi${introName} I am ChatterRax Bot. I help triage Microsoft workplace issues across Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account access. Tell me what is going wrong and I will help sort the issue before we open a ticket.`;
+}
+
+
+function renderWelcomeMessage(profile = {}) {
+    if (!welcomeMessage) {
+        return;
+    }
+    welcomeMessage.textContent = buildWelcomeMessage(profile);
+}
+
+
+function buildQuickActionPrompt(label) {
+    const trimmed = String(label || "").trim();
+    return trimmed ? `Let's handle ${trimmed} next.` : "";
+}
 
 
 function getOrCreateClientSessionId() {
@@ -37,11 +54,40 @@ function getOrCreateClientSessionId() {
 }
 
 
-function createMessageElement(text, sender) {
+function createMessageElement(text, sender, options = {}) {
     const msg = document.createElement("div");
     msg.className = sender === "user" ? "chat-msg-user" : "chat-msg-bot";
     if (sender === "bot") {
         appendFormattedText(msg, text);
+
+        if (Array.isArray(options.quickReplies) && options.quickReplies.length) {
+            const actionList = document.createElement("div");
+            actionList.className = "chat-quick-actions";
+
+            options.quickReplies.forEach(label => {
+                const prompt = buildQuickActionPrompt(label);
+                if (!prompt) {
+                    return;
+                }
+
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "chat-quick-action";
+                button.textContent = `Next: ${label}`;
+                button.addEventListener("click", function() {
+                    if (isSending) {
+                        return;
+                    }
+                    userInput.value = prompt;
+                    sendMessage();
+                });
+                actionList.appendChild(button);
+            });
+
+            if (actionList.childNodes.length) {
+                msg.appendChild(actionList);
+            }
+        }
     } else {
         msg.textContent = text;
     }
@@ -74,8 +120,8 @@ function appendFormattedText(container, text, linkClass = "chat-link") {
 }
 
 
-function addMessage(text, sender) {
-    const msg = createMessageElement(text, sender);
+function addMessage(text, sender, options = {}) {
+    const msg = createMessageElement(text, sender, options);
     chatBox.appendChild(msg);
     chatBox.scrollTop = chatBox.scrollHeight;
     return msg;
@@ -141,46 +187,6 @@ function updateScreenState() {
 }
 
 
-function hideStatusBanner() {
-    statusBanner.classList.add("hidden");
-    statusBanner.style.display = "";
-}
-
-
-function showStatusBanner(message) {
-    statusBannerText.textContent = "";
-    appendFormattedText(
-        statusBannerText,
-        message || "Microsoft is reporting a service issue right now. This may affect your support request.",
-        "status-banner-link"
-    );
-    statusBanner.classList.remove("hidden");
-    statusBanner.style.display = "flex";
-}
-
-
-async function refreshStatusBanner(service = "") {
-    if (statusBannerDismissed) {
-        return;
-    }
-
-    try {
-        const query = service ? `?service=${encodeURIComponent(service)}` : "";
-        const response = await fetch(`/status${query}`);
-        const payload = await response.json();
-
-        if (!response.ok || payload.error || !payload.issue_found) {
-            hideStatusBanner();
-            return;
-        }
-
-        showStatusBanner(payload.summary || "Microsoft is reporting a service issue right now. This may affect your support request.");
-    } catch (error) {
-        hideStatusBanner();
-    }
-}
-
-
 function setProfileSubmittedState(isSubmitted, statusMessage) {
     profileSubmitted = isSubmitted;
     profileSubmitBtn.textContent = isSubmitted ? "Details Saved" : "Start Chat";
@@ -199,6 +205,7 @@ function loadSavedProfile() {
         getOrCreateClientSessionId();
         const saved = sessionStorage.getItem(PROFILE_STORAGE_KEY);
         if (!saved) {
+            renderWelcomeMessage({});
             setProfileSubmittedState(false, "Your data is securely logged for internal follow-up.");
             return;
         }
@@ -207,10 +214,12 @@ function loadSavedProfile() {
         profileNameInput.value = profile.name || "";
         profileEmailInput.value = profile.email || "";
         profileDepartmentInput.value = profile.department || "";
+        renderWelcomeMessage(profile);
         setProfileSubmittedState(true, "Details saved. Your support session is ready.");
         statusBannerDismissed = false;
     } catch (error) {
         sessionStorage.removeItem(PROFILE_STORAGE_KEY);
+        renderWelcomeMessage({});
         setProfileSubmittedState(false, "Your data is securely logged for internal follow-up.");
     }
 }
@@ -220,7 +229,7 @@ function getValidatedUserProfile() {
     const profile = readUserProfile();
 
     if (!profile.name || !profile.email || !profile.department) {
-        profileSubmitStatus.textContent = "Please enter your name, email, and department before starting the chat.";
+        profileSubmitStatus.textContent = "Please enter your name, work email, and department or team before starting the chat.";
         profileSubmitStatus.className = "text-xs text-center text-rose-600 mt-4";
 
         if (!profile.name) {
@@ -235,7 +244,7 @@ function getValidatedUserProfile() {
 
     const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email);
     if (!emailLooksValid) {
-        profileSubmitStatus.textContent = "Please enter a valid email address before starting the chat.";
+        profileSubmitStatus.textContent = "Please enter a valid work email address before starting the chat.";
         profileSubmitStatus.className = "text-xs text-center text-rose-600 mt-4";
         profileEmailInput.focus();
         return null;
@@ -252,6 +261,7 @@ function submitUserProfile() {
         return null;
     }
 
+    renderWelcomeMessage(profile);
     setProfileSubmittedState(true, "Details saved. Your support session is ready.");
     statusBannerDismissed = false;
     userInput.focus();
@@ -317,14 +327,10 @@ async function sendMessage() {
         if (!data.resolved && data.ticket_id) {
             botReply += ` Ticket #${data.ticket_id} has been created for the admin team.`;
         }
-        addMessage(botReply, "bot");
+        addMessage(botReply, "bot", {
+            quickReplies: data.next_issue_options || []
+        });
 
-        if (data.status_checked && data.status_summary) {
-            statusBannerDismissed = false;
-            showStatusBanner(data.status_summary);
-        } else {
-            await refreshStatusBanner(data.service || "");
-        }
     } catch (error) {
         const elapsed = Date.now() - startedAt;
         const remainingDelay = Math.max(0, BOT_RESPONSE_DELAY_MS - elapsed);
@@ -349,11 +355,6 @@ profileForm.addEventListener("submit", function(event) {
 profileNameInput.addEventListener("input", markProfileAsEdited);
 profileEmailInput.addEventListener("input", markProfileAsEdited);
 profileDepartmentInput.addEventListener("input", markProfileAsEdited);
-statusBannerDismiss.addEventListener("click", function() {
-    statusBannerDismissed = true;
-    hideStatusBanner();
-});
-
 sendBtn.addEventListener("click", sendMessage);
 userInput.addEventListener("keydown", function(event) {
     if (event.key === "Enter") {

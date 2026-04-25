@@ -1,16 +1,21 @@
-# Ignore test files
+# Local utility files
 query_runner.py
 
-# Ignore Python cache files
+# Python cache files
 __pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 
-# Ignore environment files
+# Environment files
 .env
 *.env
 
-# ignore logs
+# Logs
 test_log.txt
 logs/
 *.log
+
+# Runtime cache files
+data/retrieval_cache.json
+data/support_link_cache.json

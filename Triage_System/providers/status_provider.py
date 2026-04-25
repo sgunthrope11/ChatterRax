@@ -1,6 +1,3 @@
-# Live scraping was removed: status.cloud.microsoft is a JavaScript-rendered React app.
-# A plain HTTP fetch returns only the HTML shell, so no real status data is obtainable.
-
 STATUS_PAGE_URL = "https://status.cloud.microsoft/"
 
 KNOWN_SERVICES = {
@@ -27,18 +24,6 @@ def _resolve_service(service_name):
 
 
 def check_microsoft_public_status(service_name=None):
-    """
-    NOTE: status.cloud.microsoft is a JavaScript-rendered React app. A plain
-    HTTP fetch returns only the HTML shell - no real status content is present
-    in the response. No reliable unauthenticated JSON or RSS API has been found
-    for consumer Microsoft 365 status. Rather than parsing an empty shell and
-    confidently returning issue_found=False (which implies the service is healthy
-    when we have no data), this function returns an honest fallback that directs
-    the user to the status page directly.
-
-    To enable real status checks in the future: replace this function body with
-    a call to a confirmed working API or RSS endpoint.
-    """
     resolved_service, service_known = _resolve_service(service_name)
     return {
         "source": STATUS_PAGE_URL,

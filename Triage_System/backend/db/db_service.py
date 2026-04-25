@@ -1,9 +1,12 @@
 import pyodbc
 
 try:
-    from connection import get_connection
+    from backend.db.connection import get_connection
 except ModuleNotFoundError:
     from .connection import get_connection
+
+
+SUMMARY_MESSAGE_PREFIX = "[THREAD_SUMMARY]"
 
 
 def get_or_create_chat_user(user_name, email, department):
@@ -203,6 +206,153 @@ def save_chat_message(session_id, sender, message_text):
         if cursor:
             cursor.close()
         if conn:
+            conn.close()
+
+
+def get_latest_session_summary(session_id):
+    """
+    Returns the latest persisted thread summary for a session, or an empty string.
+    Summaries are stored inside Chat_Messages using the normal SQL flow with a
+    reserved message prefix so no extra table is required.
+    """
+    if not isinstance(session_id, int) or session_id <= 0:
+        return ""
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        base_query = """
+        SELECT TOP (1) MessageText
+        FROM Chat_Messages
+        WHERE SessionID = ?
+          AND Sender = 'bot'
+          AND LEFT(MessageText, ?) = ?
+        """
+        params = (session_id, len(SUMMARY_MESSAGE_PREFIX), SUMMARY_MESSAGE_PREFIX)
+        order_variants = (
+            "ORDER BY MessageID DESC",
+            "ORDER BY SentAt DESC, MessageID DESC",
+            "ORDER BY SentAt DESC",
+        )
+
+        row = None
+        for order_clause in order_variants:
+            try:
+                cursor.execute(f"{base_query}\n{order_clause}", params)
+                row = cursor.fetchone()
+                break
+            except pyodbc.Error:
+                continue
+
+        if not row or not str(row[0] or "").strip():
+            return ""
+
+        return str(row[0]).strip()[len(SUMMARY_MESSAGE_PREFIX):].strip()
+
+    except pyodbc.Error as e:
+        print("Error fetching session summary:", e)
+        return ""
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def save_session_summary(session_id, summary_text):
+    """
+    Persists a compact thread summary into Chat_Messages using a reserved prefix.
+    Duplicate summaries are skipped to avoid polluting the transcript.
+    """
+    summary_text = str(summary_text or "").strip()
+    if not isinstance(session_id, int) or session_id <= 0 or not summary_text:
+        return False
+
+    existing_summary = get_latest_session_summary(session_id)
+    if existing_summary == summary_text:
+        return True
+
+    return save_chat_message(
+        session_id,
+        "bot",
+        f"{SUMMARY_MESSAGE_PREFIX} {summary_text}",
+    )
+
+
+def get_chat_messages(session_id, limit=None, connection=None):
+    """
+    Returns chat messages for one session ordered oldest -> newest.
+    When a connection is supplied, it is reused so callers can read
+    uncommitted test data inside a transaction.
+    """
+    if not isinstance(session_id, int) or session_id <= 0:
+        return []
+
+    owns_connection = connection is None
+    conn = connection
+    cursor = None
+    try:
+        if conn is None:
+            conn = get_connection()
+        cursor = conn.cursor()
+
+        top_clause = ""
+        params = []
+        if isinstance(limit, int) and limit > 0:
+            top_clause = "TOP (?) "
+            params.append(limit)
+
+        base_query = f"""
+        SELECT {top_clause}Sender, MessageText
+        FROM Chat_Messages
+        WHERE SessionID = ?
+          AND LEFT(MessageText, ?) <> ?
+        """
+        params.append(session_id)
+        params.extend([len(SUMMARY_MESSAGE_PREFIX), SUMMARY_MESSAGE_PREFIX])
+
+        order_variants = (
+            "ORDER BY MessageID DESC",
+            "ORDER BY CreatedAt DESC, MessageID DESC",
+            "ORDER BY SentAt DESC, MessageID DESC",
+            "ORDER BY CreatedAt DESC",
+            "ORDER BY SentAt DESC",
+        )
+
+        rows = None
+        for order_clause in order_variants:
+            try:
+                cursor.execute(f"{base_query}\n{order_clause}", tuple(params))
+                rows = cursor.fetchall()
+                break
+            except pyodbc.Error:
+                continue
+
+        if rows is None:
+            return []
+
+        messages = [
+            {
+                "sender": str(row[0] or "").strip().lower(),
+                "message": str(row[1] or "").strip(),
+            }
+            for row in reversed(rows)
+            if row and str(row[1] or "").strip()
+        ]
+        return messages
+
+    except pyodbc.Error as e:
+        print("Error fetching chat messages:", e)
+        return []
+
+    finally:
+        if cursor:
+            cursor.close()
+        if owns_connection and conn:
             conn.close()
 
 
