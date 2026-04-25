@@ -28,7 +28,6 @@ from backend.db.db_service import (
     update_ticket_status,
 )
 from providers.qwen_provider import warm_qwen_model
-from providers.status_provider import check_microsoft_public_status
 
 app = Flask(
     __name__,
@@ -190,24 +189,6 @@ def chatbot_page():
 @app.route("/admin")
 def admin_page():
     return render_template("admin.html")
-
-
-@app.route("/status", methods=["GET"])
-def status():
-    try:
-        service_name = str(request.args.get("service", "")).strip() or None
-        status_result = check_microsoft_public_status(service_name=service_name)
-        return jsonify(status_result)
-    except Exception as exc:
-        print(f"Unexpected error in /status route: {exc}")
-        return jsonify({
-            "issue_found": False,
-            "summary": "Unable to retrieve Microsoft public status right now.",
-            "service": request.args.get("service") or "microsoft 365",
-            "status_available": False,
-            "stale": False,
-            "error": True,
-        }), 500
 
 
 # =========================
