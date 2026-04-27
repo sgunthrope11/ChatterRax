@@ -198,6 +198,56 @@ LOW_PRIORITY_TERMS = (
 )
 
 WEB_LINK_RE = re.compile(r"\s*https?://\S+")
+AMBIGUOUS_ERROR_CODE_RE = re.compile(
+    r"\b[a-z]{2,}(?:[-\s]?\d{2,})\b|\b[a-z]{1,3}-\d{2,}\b"
+)
+
+AMBIGUOUS_MICROSOFT_SURFACE_TERMS = (
+    "microsoft 365",
+    "ms 365",
+    "office 365",
+    "company 365",
+    "work 365",
+    "microsoft work",
+    "work dashboard",
+    "workspace",
+    "portal",
+    "panel",
+    "side panel",
+    "window",
+    "box",
+    "tile",
+    "chooser",
+    "picker",
+    "continue button",
+    "purple continue",
+    "click allow",
+    "click approve",
+    "blank white",
+    "flashes",
+    "closes",
+    "loops back",
+    "bridge",
+    "broker",
+    "tenant context",
+    "realm mismatch",
+    "handshake",
+)
+
+AMBIGUOUS_FAILURE_TERMS = (
+    "failed",
+    "expired",
+    "unavailable",
+    "stale",
+    "mismatch",
+    "closes",
+    "flashes",
+    "loops back",
+    "blank",
+    "does not show an app",
+    "no app name",
+    "not sure what it belongs to",
+)
 
 UNSUPPORTED_STATUS_KEYWORDS = {
     "azure": ("azure",),
@@ -3469,6 +3519,61 @@ def _strip_web_links(reply):
     return WEB_LINK_RE.sub("", str(reply or "")).strip()
 
 
+def _should_defer_ambiguous_surface_to_gemini(
+    message,
+    service,
+    intent,
+    explicit_service=None,
+    fuzzy_service=None,
+    hardware_context=None,
+    known_issue=None,
+    multi_context=None,
+    escalation_requested=False,
+    awaiting_ticket_detail=False,
+    unsupported_service=None,
+    user_is_correcting=False,
+):
+    if escalation_requested or awaiting_ticket_detail or unsupported_service:
+        return False
+    if user_is_correcting:
+        return False
+    if known_issue and known_issue.get("intent") != "unknown":
+        return False
+    if hardware_context and hardware_context.get("is_out_of_scope"):
+        return False
+
+    lower_msg = str(message or "").lower()
+    has_surface_term = _contains_any(lower_msg, AMBIGUOUS_MICROSOFT_SURFACE_TERMS)
+    has_error_code = AMBIGUOUS_ERROR_CODE_RE.search(lower_msg) is not None
+    has_ambiguous_failure = _contains_any(lower_msg, AMBIGUOUS_FAILURE_TERMS)
+    if not (has_surface_term and (has_error_code or has_ambiguous_failure)):
+        return False
+
+    clear_service = explicit_service and explicit_service != "microsoft 365"
+    if clear_service and intent != "unknown":
+        return False
+
+    has_clear_hardware = bool(
+        hardware_context
+        and hardware_context.get("has_hardware_term")
+        and hardware_context.get("hardware_term")
+    )
+    if has_clear_hardware and intent != "unknown":
+        return False
+
+    if multi_context and multi_context.get("is_multi") and explicit_service:
+        return False
+
+    return service in {
+        "microsoft 365",
+        "microsoft account",
+        "windows",
+        "word",
+        "excel",
+        "powerpoint",
+    } or bool(fuzzy_service)
+
+
 def _should_use_support_link_fallback(service, intent, detailed_enough,
                                       hardware_context, model_error, message=""):
     if not model_error:
@@ -3600,6 +3705,7 @@ def _outlook_calendar_reply():
 def _microsoft_account_recovery_reply():
     return _build_reply([
         "That sounds more like Microsoft account recovery than a normal sign-in typo.",
+        "Do not send passwords, verification codes, recovery codes, or Authenticator codes in this chat.",
         "Start at the Microsoft account recovery page and choose the option that says you no longer have access to the old phone, code, or Authenticator method.",
         "If Microsoft offers a backup email or recovery form, use that path first so you can update the security method before trying to sign in again.",
     ])
@@ -4002,9 +4108,34 @@ def handle_message(message, awaiting_ticket_detail=False,
         "next_issue_options": [],
         "thread_summary": "",
         "escalation_requested": escalation_requested,
+        "response_source": "rules",
     }
+    prefer_gemini_for_ambiguous_surface = _should_defer_ambiguous_surface_to_gemini(
+        msg,
+        service,
+        intent,
+        explicit_service=explicit_service,
+        fuzzy_service=fuzzy_service,
+        hardware_context=hardware_context,
+        known_issue=known_issue,
+        multi_context=multi_context,
+        escalation_requested=escalation_requested,
+        awaiting_ticket_detail=awaiting_ticket_detail,
+        unsupported_service=unsupported_service,
+        user_is_correcting=user_is_correcting,
+    )
+    if prefer_gemini_for_ambiguous_surface:
+        service = "microsoft 365"
+        intent = "unknown"
+        response.update({
+            "service": service,
+            "intent": intent,
+            "detected_services": [],
+            "priority": "medium",
+        })
 
     def _finalize_response(payload):
+        payload.setdefault("response_source", "rules")
         next_issue_options = _service_label_list(payload.get("next_issue_options", []))
         payload["next_issue_options"] = next_issue_options
 
@@ -4183,7 +4314,7 @@ def handle_message(message, awaiting_ticket_detail=False,
             })
             return _finalize_response(response)
 
-    if _looks_like_vague_service_message(
+    if not prefer_gemini_for_ambiguous_surface and _looks_like_vague_service_message(
         msg,
         service,
         intent,
@@ -4199,7 +4330,13 @@ def handle_message(message, awaiting_ticket_detail=False,
         })
         return _finalize_response(response)
 
-    if not inherited_recent_service and not escalation_requested and not awaiting_ticket_detail and _is_unrelated_scope(msg, detected_services, hardware_context, intent):
+    if (
+        not prefer_gemini_for_ambiguous_surface
+        and not inherited_recent_service
+        and not escalation_requested
+        and not awaiting_ticket_detail
+        and _is_unrelated_scope(msg, detected_services, hardware_context, intent)
+    ):
         response.update({
             "resolved": True,
             "reply": _choose_reply(msg, SCOPE_REPLIES),
@@ -4208,6 +4345,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         inherited_recent_service
+        and not prefer_gemini_for_ambiguous_surface
         and intent == "unknown"
         and not known_issue
         and len(msg.split()) <= 8
@@ -4329,7 +4467,11 @@ def handle_message(message, awaiting_ticket_detail=False,
             })
         return _finalize_response(response)
 
-    if multi_context["is_multi"] and not escalation_requested:
+    if (
+        multi_context["is_multi"]
+        and not prefer_gemini_for_ambiguous_surface
+        and not escalation_requested
+    ):
         multi_reply, next_issue_options = _multi_issue_reply(
             msg,
             multi_context["services"],
@@ -4346,6 +4488,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         known_issue
+        and not prefer_gemini_for_ambiguous_surface
         and known_issue.get("intent") != "unknown"
         and not escalation_requested
         and not user_is_correcting
@@ -4373,7 +4516,12 @@ def handle_message(message, awaiting_ticket_detail=False,
         })
         return _finalize_response(response)
 
-    if service == "outlook" and _contains_any(msg, OUTLOOK_CALENDAR_TERMS) and not user_is_correcting:
+    if (
+        not prefer_gemini_for_ambiguous_surface
+        and service == "outlook"
+        and _contains_any(msg, OUTLOOK_CALENDAR_TERMS)
+        and not user_is_correcting
+    ):
         response.update({
             "resolved": True,
             "reply": _outlook_calendar_reply(),
@@ -4382,6 +4530,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         service == "microsoft account"
+        and not prefer_gemini_for_ambiguous_surface
         and _contains_any(msg, MICROSOFT_ACCOUNT_THROTTLE_TERMS)
         and not user_is_correcting
     ):
@@ -4392,7 +4541,12 @@ def handle_message(message, awaiting_ticket_detail=False,
         })
         return _finalize_response(response)
 
-    if service == "microsoft account" and _contains_any(msg, MICROSOFT_ACCOUNT_RECOVERY_TERMS) and not user_is_correcting:
+    if (
+        not prefer_gemini_for_ambiguous_surface
+        and service == "microsoft account"
+        and _contains_any(msg, MICROSOFT_ACCOUNT_RECOVERY_TERMS)
+        and not user_is_correcting
+    ):
         response.update({
             "resolved": True,
             "intent": "sign_in",
@@ -4402,6 +4556,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         service == "outlook"
+        and not prefer_gemini_for_ambiguous_surface
         and has_outlook_callback_context
         and _contains_any(msg, OUTLOOK_CALLBACK_SYNC_TERMS)
         and _contains_any(msg, ("again", "back", "before", "still", "came back"))
@@ -4416,6 +4571,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         service == "sharepoint"
+        and not prefer_gemini_for_ambiguous_surface
         and _contains_any(msg, SHAREPOINT_VERSION_HISTORY_TERMS)
         and not _contains_any(msg, ("checked out", "locked for editing", "another device"))
         and not user_is_correcting
@@ -4428,6 +4584,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         service == "onedrive"
+        and not prefer_gemini_for_ambiguous_surface
         and _contains_any(msg, ONEDRIVE_CONFLICT_TERMS)
         and not user_is_correcting
     ):
@@ -4440,6 +4597,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         service == "excel"
+        and not prefer_gemini_for_ambiguous_surface
         and _contains_any(msg, EXCEL_AUTOSAVE_TERMS)
         and not user_is_correcting
     ):
@@ -4451,6 +4609,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         service == "teams"
+        and not prefer_gemini_for_ambiguous_surface
         and _contains_any(msg, TEAMS_JOIN_TERMS)
         and len(msg.split()) <= 3
         and not user_is_correcting
@@ -4474,7 +4633,7 @@ def handle_message(message, awaiting_ticket_detail=False,
         escalation_requested=escalation_requested,
         awaiting_ticket_detail=awaiting_ticket_detail,
         user_is_correcting=user_is_correcting,
-    ):
+    ) and not prefer_gemini_for_ambiguous_surface:
         primary_resource = (keyword_context.get("resources") or [{}])[0]
         resource_intent = primary_resource.get("intent")
         response.update({
@@ -4485,10 +4644,16 @@ def handle_message(message, awaiting_ticket_detail=False,
             "knowledge_retrieved": True,
             "knowledge_source": "local_context",
             "knowledge_confidence": keyword_context.get("confidence", 0.0),
+            "response_source": "local_knowledge",
         })
         return _finalize_response(response)
 
-    if (service, intent) in SERVICE_INTENT_RESPONSES and not escalation_requested and not user_is_correcting:
+    if (
+        not prefer_gemini_for_ambiguous_surface
+        and (service, intent) in SERVICE_INTENT_RESPONSES
+        and not escalation_requested
+        and not user_is_correcting
+    ):
         response.update({
             "resolved": True,
             "reply": _rule_based_step_reply(service, intent),
@@ -4497,6 +4662,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     if (
         hardware_context["has_hardware_term"]
+        and not prefer_gemini_for_ambiguous_surface
         and not _should_keep_office_app_context(service, hardware_context, msg)
         and not escalation_requested
         and not user_is_correcting
@@ -4555,6 +4721,7 @@ def handle_message(message, awaiting_ticket_detail=False,
             inferred_priority=inferred_priority,
         )
         if applied:
+            applied["response_source"] = "gemini"
             if keyword_context.get("found"):
                 applied.update({
                     "knowledge_retrieved": True,
@@ -4591,12 +4758,14 @@ def handle_message(message, awaiting_ticket_detail=False,
             "knowledge_retrieved": True,
             "knowledge_source": "local_fallback",
             "knowledge_confidence": keyword_fallback.get("confidence", 0.0),
+            "response_source": "local_fallback",
         })
         return _finalize_response(response)
 
     # Hardware fallback - better than the generic paragraph
     if (
         hardware_context["has_hardware_term"]
+        and not prefer_gemini_for_ambiguous_surface
         and not _should_keep_office_app_context(service, hardware_context, msg)
     ):
         term = hardware_context["hardware_term"]
@@ -4609,7 +4778,11 @@ def handle_message(message, awaiting_ticket_detail=False,
             return _finalize_response(response)
 
     # Known intent fallback
-    if intent in SHORT_STEP_RESPONSES and not user_is_correcting:
+    if (
+        not prefer_gemini_for_ambiguous_surface
+        and intent in SHORT_STEP_RESPONSES
+        and not user_is_correcting
+    ):
         response.update({
             "resolved": True,
             "reply": _rule_based_step_reply(service, intent),
@@ -4640,11 +4813,16 @@ def handle_message(message, awaiting_ticket_detail=False,
                 "knowledge_confidence": support_link_plan.get("confidence", 0.0),
                 "knowledge_learned": support_link_plan.get("learned", False),
                 "knowledge_source_url": support_link_plan.get("source_url", ""),
+                "response_source": "support_link",
             })
             return _finalize_response(response)
 
     # Service detected fallback
-    if service and service != "microsoft 365":
+    if (
+        not prefer_gemini_for_ambiguous_surface
+        and service
+        and service != "microsoft 365"
+    ):
         response.update({
             "resolved": True,
             "reply": _service_specific_prompt(service),
@@ -4659,5 +4837,6 @@ def handle_message(message, awaiting_ticket_detail=False,
             "If you already need hands-on help, say ticket and I will gather the details."
         ),
         "needs_description": True,
+        "response_source": "fallback",
     })
     return _finalize_response(response)

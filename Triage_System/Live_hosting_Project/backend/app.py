@@ -348,6 +348,7 @@ def chat():
             "knowledge_source": result.get("knowledge_source", ""),
             "knowledge_learned": result.get("knowledge_learned", False),
             "knowledge_source_url": result.get("knowledge_source_url", ""),
+            "response_source": result.get("response_source", ""),
             "error": False
         })
 

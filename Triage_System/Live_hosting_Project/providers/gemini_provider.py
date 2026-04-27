@@ -17,11 +17,12 @@ if load_dotenv:
     load_dotenv(_ROOT_DIR / ".env")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_ENABLED = os.environ.get("GEMINI_ENABLED", "True").lower() == "true"
 GEMINI_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "30"))
 GEMINI_TEMPERATURE = float(os.environ.get("GEMINI_TEMPERATURE", "0.3"))
-GEMINI_MAX_TOKENS = int(os.environ.get("GEMINI_MAX_TOKENS", "256"))
+GEMINI_MAX_TOKENS = int(os.environ.get("GEMINI_MAX_TOKENS", "1024"))
+GEMINI_THINKING_BUDGET = int(os.environ.get("GEMINI_THINKING_BUDGET", "0"))
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
@@ -187,6 +188,8 @@ Output ONLY JSON with keys: service, intent, needs_ticket, needs_description, pr
 Reply should be 1-2 warm, specific sentences with no URLs.
 Current issue first. Only reuse earlier context if the user clearly points back.
 If app or issue is unclear, ask one focused clarification question.
+For unclear app names, made-up error codes, vague popups, or missing details, do not open or suggest a ticket yet. Set needs_ticket false and ask for the app name, the action taken, or the exact message.
+Set needs_ticket true only when the user explicitly asks for a ticket, human, agent, or handoff, or when the issue is clearly business-critical with enough detail to route it.
 If the user clearly names an app and the issue happens inside that app, prefer that app as the service.
 Do not switch to microsoft account unless the user is mainly locked out of the account itself, missing verification codes, or recovering account access.
 Password prompts inside Outlook, Teams, OneDrive, or Microsoft 365 apps should usually stay with that app.
@@ -299,8 +302,13 @@ def _call_gemini_api(prompt):
         "generationConfig": {
             "temperature": GEMINI_TEMPERATURE,
             "maxOutputTokens": GEMINI_MAX_TOKENS,
+            "responseMimeType": "application/json",
         },
     }
+    if "2.5" in GEMINI_MODEL:
+        payload["generationConfig"]["thinkingConfig"] = {
+            "thinkingBudget": GEMINI_THINKING_BUDGET,
+        }
     body = json.dumps(payload).encode("utf-8")
     req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
     try:
@@ -331,6 +339,8 @@ def get_gemini_health_status():
         "enabled": GEMINI_ENABLED,
         "configured": bool(GEMINI_API_KEY),
         "model": GEMINI_MODEL,
+        "max_tokens": GEMINI_MAX_TOKENS,
+        "thinking_budget": GEMINI_THINKING_BUDGET,
     }
 
 
