@@ -1191,7 +1191,7 @@ DETAIL_HINT_TERMS = (
     "crashes", "crashing",
 )
 
-# Used only by rule-based fallback - emergency responses when Ollama is down
+# Used only by rule-based fallback - emergency responses when Gemini is down
 SHORT_STEP_RESPONSES = {
     "password_reset": [
         "Go to the Microsoft sign-in page and choose Forgot password.",
@@ -4023,7 +4023,7 @@ def handle_message(message, awaiting_ticket_detail=False,
         return payload
 
     # =============================================
-    # FAST EXITS - bypass Ollama entirely
+    # FAST EXITS - bypass Gemini entirely
     # Only for cases where AI adds zero value
     # =============================================
 
@@ -4518,7 +4518,7 @@ def handle_message(message, awaiting_ticket_detail=False,
             return _finalize_response(response)
 
     # =============================================
-    # OLLAMA - handles everything else
+    # GEMINI - handles everything else
     # One word, two words, misspellings, hardware,
     # multi-app, bad grammar - all goes here
     # =============================================
@@ -4565,13 +4565,13 @@ def handle_message(message, awaiting_ticket_detail=False,
 
     # =============================================
     # RULE-BASED FALLBACK
-    # Only reached when Ollama is unreachable or
+    # Only reached when Gemini is unreachable or
     # returned an unreadable response
     # =============================================
 
     if error:
         print(
-            f"[bot_logic] Ollama unavailable, using rule-based fallback. "
+            f"[bot_logic] Gemini unavailable, using rule-based fallback. "
             f"Error: {error}"
         )
 

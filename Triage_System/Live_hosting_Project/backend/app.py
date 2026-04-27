@@ -27,6 +27,7 @@ from backend.db.db_service import (
     update_ticket_status,
 )
 from scheduler import start_scheduler
+from providers.gemini_provider import get_gemini_health_status
 
 app = Flask(
     __name__,
@@ -157,6 +158,16 @@ def chatbot_page():
 @app.route("/admin")
 def admin_page():
     return render_template("admin.html")
+
+
+@app.route("/health/gemini")
+def gemini_health():
+    status = get_gemini_health_status()
+    http_status = 200 if status["enabled"] and status["configured"] else 503
+    return jsonify({
+        "error": http_status != 200,
+        **status,
+    }), http_status
 
 
 # =========================

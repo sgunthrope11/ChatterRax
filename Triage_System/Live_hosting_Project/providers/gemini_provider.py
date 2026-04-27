@@ -324,8 +324,14 @@ def _call_gemini_api(prompt):
         return None, str(exc)
 
 
-def warm_qwen_model(reason="activity"):
-    return True
+def get_gemini_health_status():
+    """Return Gemini configuration status without calling the model API."""
+    return {
+        "provider": "gemini",
+        "enabled": GEMINI_ENABLED,
+        "configured": bool(GEMINI_API_KEY),
+        "model": GEMINI_MODEL,
+    }
 
 
 def generate_triage_response(message, service_hint=None, conversation_history=None,
