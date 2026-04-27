@@ -1,0 +1,79 @@
+{
+  "outlook|unknown|Outlook categories colors are weird": {
+    "created_at": 1776706765.290556,
+    "value": {
+      "found": true,
+      "reply": "I did not find a specific fix in my local knowledge for that Outlook issue, but here is the official Microsoft support page that covers it: https://support.microsoft.com/en-us/outlook \u2014 Work through it and let me know if you hit a step that does not match what you see.",
+      "confidence": 0.85,
+      "from_cache": false,
+      "source_url": "https://support.microsoft.com/en-us/outlook",
+      "source_title": "Outlook Support",
+      "learned": false
+    }
+  },
+  "teams|unknown|teams": {
+    "created_at": 1776712931.7623012,
+    "value": {
+      "found": true,
+      "reply": "My local knowledge does not have a step-by-step for that exact Teams scenario, but this official page should cover it: https://support.microsoft.com/en-us/teams - Try it and come back if any step does not match or you hit a new error.",
+      "confidence": 0.35,
+      "from_cache": false,
+      "reason": "low_confidence_fallback",
+      "source_url": "https://support.microsoft.com/en-us/teams",
+      "source_title": "Teams Support",
+      "learned": false
+    }
+  },
+  "outlook|unknown|On outlook i am not receiving any emails": {
+    "created_at": 1777035162.8061056,
+    "value": {
+      "found": true,
+      "reply": "Here is the Microsoft support page most relevant to that Outlook issue: https://support.microsoft.com/en-us/outlook - If the steps there do not line up with what you are seeing, tell me what screen you land on and I will adjust.",
+      "confidence": 0.35,
+      "from_cache": false,
+      "reason": "low_confidence_fallback",
+      "source_url": "https://support.microsoft.com/en-us/outlook",
+      "source_title": "Outlook Support",
+      "learned": false
+    }
+  },
+  "outlook|unknown|outlok isnt dead-dead but like... search gives me nothing, one shared mailbox vanished, and a pdf just spins if i click ": {
+    "created_at": 1777061089.407211,
+    "value": {
+      "found": true,
+      "reply": "The closest official Microsoft resource for that Outlook issue is here: https://support.microsoft.com/en-us/outlook - Go through it in order and let me know which step you get stuck on if it does not resolve.",
+      "confidence": 0.35,
+      "from_cache": false,
+      "reason": "low_confidence_fallback",
+      "source_url": "https://support.microsoft.com/en-us/outlook",
+      "source_title": "Outlook Support",
+      "learned": false
+    }
+  },
+  "outlook|unknown|that search thing is still weird and the mailbox part came back too": {
+    "created_at": 1777061976.55886,
+    "value": {
+      "found": true,
+      "reply": "I did not find a specific fix in my local knowledge for that Outlook issue, but here is the official Microsoft support page that covers it: https://support.microsoft.com/en-us/outlook - Work through it and let me know if you hit a step that does not match what you see.",
+      "confidence": 0.35,
+      "from_cache": false,
+      "reason": "low_confidence_fallback",
+      "source_url": "https://support.microsoft.com/en-us/outlook",
+      "source_title": "Outlook Support",
+      "learned": false
+    }
+  },
+  "outlook|unknown|Let's handle Outlook next.": {
+    "created_at": 1777126724.2643733,
+    "value": {
+      "found": true,
+      "reply": "I am routing you to the best official Outlook support page for that: https://support.microsoft.com/en-us/outlook - If any step looks different on your end, send me the exact wording and I will help you navigate it.",
+      "confidence": 0.35,
+      "from_cache": false,
+      "reason": "low_confidence_fallback",
+      "source_url": "https://support.microsoft.com/en-us/outlook",
+      "source_title": "Outlook Support",
+      "learned": false
+    }
+  }
+}

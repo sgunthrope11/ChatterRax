@@ -1,0 +1,27 @@
+{
+  "teams|unknown|teams microsoft teams microphone cannot be heard in a web meeting Microsoft support": {
+    "created_at": 1776275539.8451688,
+    "value": {
+      "found": true,
+      "reply": "I found Microsoft guidance that matches the issue. Try this in order: 1. For the best performance, make sure you have the latest version of Teams and the most recent Windows update or Mac OS update installed. 2. Make sure you're not muted. 3. In your meeting controls, make sure Mic is in an unmuted state. 4. If the mic icon has a line through it, you're currently on mute. Select Unmute mic to unmute. \u200b\u200b\u200b\u200b\u200b\u200b\u200b. 5. Check that your headphone boom is not in the mute position (usually upright or away from your mouth), or that your external mic's physical mute button is not turned on. Source: https://support.microsoft.com/en-gb/office/my-microphone-isn-t-working-in-microsoft-teams-666d1123-9dd0-4a31-ad2e-a758b204f33a If your screen does not match these steps, tell me what you see and I will adjust.",
+      "confidence": 0.72,
+      "from_cache": false,
+      "source_url": "https://support.microsoft.com/en-gb/office/my-microphone-isn-t-working-in-microsoft-teams-666d1123-9dd0-4a31-ad2e-a758b204f33a",
+      "source_title": "My microphone isn't working in Microsoft Teams",
+      "learned": true,
+      "fetched_pages": 1
+    }
+  },
+  "outlook|unknown|Outlook categories colors are weird": {
+    "created_at": 1776705896.1994224,
+    "value": {
+      "found": true,
+      "reply": "I did not find a specific fix in my local knowledge for that Outlook issue, but here is the official Microsoft support page that covers it: https://support.microsoft.com/en-us/outlook \u2014 Work through it and let me know if you hit a step that does not match what you see.",
+      "confidence": 0.85,
+      "from_cache": false,
+      "source_url": "https://support.microsoft.com/en-us/outlook",
+      "source_title": "Outlook Support",
+      "learned": false
+    }
+  }
+}
