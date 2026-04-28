@@ -1,11 +1,15 @@
 import ast
+from collections import deque
+from email.utils import parsedate_to_datetime
 import json
 import os
 import re
+import threading
+import time
 from pathlib import Path
 from socket import timeout as SocketTimeout
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener, urlopen
 
 try:
     from dotenv import load_dotenv
@@ -17,14 +21,35 @@ if load_dotenv:
     load_dotenv(_ROOT_DIR / ".env")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
 GEMINI_ENABLED = os.environ.get("GEMINI_ENABLED", "True").lower() == "true"
 GEMINI_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "30"))
 GEMINI_TEMPERATURE = float(os.environ.get("GEMINI_TEMPERATURE", "0.3"))
 GEMINI_MAX_TOKENS = int(os.environ.get("GEMINI_MAX_TOKENS", "1024"))
 GEMINI_THINKING_BUDGET = int(os.environ.get("GEMINI_THINKING_BUDGET", "0"))
+GEMINI_BYPASS_PROXY = os.environ.get("GEMINI_BYPASS_PROXY", "True").lower() == "true"
+GEMINI_TPM_LIMIT = int(os.environ.get("GEMINI_TPM_LIMIT", "250000"))
+GEMINI_RPM_LIMIT = int(os.environ.get("GEMINI_RPM_LIMIT", "5"))
+GEMINI_MIN_REQUEST_INTERVAL_SECONDS = float(
+    os.environ.get("GEMINI_MIN_REQUEST_INTERVAL_SECONDS", "0.25")
+)
+GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS = float(
+    os.environ.get("GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS", "3")
+)
+GEMINI_RATE_LIMIT_RETRIES = int(os.environ.get("GEMINI_RATE_LIMIT_RETRIES", "1"))
+GEMINI_429_COOLDOWN_SECONDS = float(os.environ.get("GEMINI_429_COOLDOWN_SECONDS", "8"))
+GEMINI_429_MAX_COOLDOWN_SECONDS = float(
+    os.environ.get("GEMINI_429_MAX_COOLDOWN_SECONDS", "300")
+)
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+_RATE_WINDOW_SECONDS = 60
+_RATE_LIMIT_LOCK = threading.Lock()
+_RATE_LIMIT_USAGE = deque()
+_REQUEST_TIMESTAMPS = deque()
+_NEXT_REQUEST_AT = 0.0
+_PAUSE_UNTIL = 0.0
+_CONSECUTIVE_429S = 0
 
 _ALLOWED_SERVICES = {
     "teams",
@@ -122,17 +147,187 @@ def _compact_text(text, max_chars=120):
     return compact[: max_chars - 3].rstrip() + "..."
 
 
+def estimate_token_count(text):
+    """Fast token estimate for limiter math; Gemini billing may differ slightly."""
+    words = re.findall(r"\S+", str(text or ""))
+    char_estimate = max(1, (len(str(text or "")) + 3) // 4)
+    word_estimate = int(len(words) * 1.35) + 1
+    return max(char_estimate, word_estimate)
+
+
+def _estimated_request_tokens(prompt):
+    output_budget = GEMINI_MAX_TOKENS + max(0, GEMINI_THINKING_BUDGET)
+    return estimate_token_count(prompt) + output_budget
+
+
+def _prune_rate_limit_state(now):
+    cutoff = now - _RATE_WINDOW_SECONDS
+    while _RATE_LIMIT_USAGE and _RATE_LIMIT_USAGE[0][0] <= cutoff:
+        _RATE_LIMIT_USAGE.popleft()
+    while _REQUEST_TIMESTAMPS and _REQUEST_TIMESTAMPS[0] <= cutoff:
+        _REQUEST_TIMESTAMPS.popleft()
+
+
+def _current_window_tokens():
+    return sum(tokens for _, tokens in _RATE_LIMIT_USAGE)
+
+
+def _reserve_gemini_capacity(estimated_tokens):
+    global _NEXT_REQUEST_AT
+    if GEMINI_TPM_LIMIT <= 0 and GEMINI_RPM_LIMIT <= 0 and GEMINI_MIN_REQUEST_INTERVAL_SECONDS <= 0:
+        return 0.0, None
+
+    now = time.monotonic()
+    with _RATE_LIMIT_LOCK:
+        _prune_rate_limit_state(now)
+        wait_until = max(_PAUSE_UNTIL, _NEXT_REQUEST_AT)
+
+        if GEMINI_TPM_LIMIT > 0:
+            window_tokens = _current_window_tokens()
+            if window_tokens + estimated_tokens > GEMINI_TPM_LIMIT:
+                if _RATE_LIMIT_USAGE:
+                    wait_until = max(wait_until, _RATE_LIMIT_USAGE[0][0] + _RATE_WINDOW_SECONDS)
+                else:
+                    return 0.0, "rate_limited_tpm"
+
+        if GEMINI_RPM_LIMIT > 0 and len(_REQUEST_TIMESTAMPS) >= GEMINI_RPM_LIMIT:
+            wait_until = max(wait_until, _REQUEST_TIMESTAMPS[0] + _RATE_WINDOW_SECONDS)
+
+        wait_seconds = max(0.0, wait_until - now)
+        if wait_seconds > GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS:
+            return wait_seconds, "rate_limited_wait_too_long"
+
+        reservation_time = max(now, wait_until)
+        _RATE_LIMIT_USAGE.append((reservation_time, estimated_tokens))
+        _REQUEST_TIMESTAMPS.append(reservation_time)
+        _NEXT_REQUEST_AT = reservation_time + max(0.0, GEMINI_MIN_REQUEST_INTERVAL_SECONDS)
+        return wait_seconds, None
+
+
+def _parse_retry_after(headers):
+    retry_after = headers.get("Retry-After") if headers else None
+    if not retry_after:
+        return None
+    try:
+        return max(0.0, float(retry_after))
+    except (TypeError, ValueError):
+        try:
+            retry_at = parsedate_to_datetime(retry_after)
+            return max(0.0, retry_at.timestamp() - time.time())
+        except (TypeError, ValueError, AttributeError, OverflowError):
+            return None
+
+
+def _parse_retry_delay_from_error_body(error_body):
+    try:
+        payload = json.loads(error_body or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return None
+    details = payload.get("error", {}).get("details") or []
+    for detail in details:
+        retry_delay = detail.get("retryDelay")
+        if not retry_delay:
+            continue
+        match = re.fullmatch(r"(\d+(?:\.\d+)?)s", str(retry_delay).strip())
+        if match:
+            return float(match.group(1))
+    message = str(payload.get("error", {}).get("message") or "")
+    match = re.search(r"retry in (\d+(?:\.\d+)?)s", message, flags=re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    return None
+
+
+def _quota_error_label(error_body):
+    try:
+        payload = json.loads(error_body or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return "rate_limited_429"
+    error = payload.get("error", {})
+    details = error.get("details") or []
+    for detail in details:
+        violations = detail.get("violations") or []
+        for violation in violations:
+            quota_id = str(violation.get("quotaId") or "")
+            quota_metric = str(violation.get("quotaMetric") or "")
+            if "PerDay" in quota_id:
+                return "quota_exhausted_daily"
+            if "requests" in quota_metric or "Requests" in quota_id:
+                return "rate_limited_requests"
+    if error.get("status") == "RESOURCE_EXHAUSTED":
+        return "quota_exhausted"
+    return "rate_limited_429"
+
+
+def _record_rate_limit_429(seconds=None):
+    global _CONSECUTIVE_429S, _PAUSE_UNTIL
+    with _RATE_LIMIT_LOCK:
+        _CONSECUTIVE_429S += 1
+        exponential_cooldown = GEMINI_429_COOLDOWN_SECONDS * (
+            2 ** min(_CONSECUTIVE_429S - 1, 6)
+        )
+        requested_cooldown = 0.0 if seconds is None else float(seconds)
+        cooldown = max(exponential_cooldown, requested_cooldown)
+        cooldown = min(max(0.0, cooldown), GEMINI_429_MAX_COOLDOWN_SECONDS)
+        _PAUSE_UNTIL = max(_PAUSE_UNTIL, time.monotonic() + cooldown)
+
+
+def _record_gemini_success():
+    global _CONSECUTIVE_429S
+    with _RATE_LIMIT_LOCK:
+        _CONSECUTIVE_429S = 0
+
+
+def get_gemini_rate_limit_status():
+    now = time.monotonic()
+    with _RATE_LIMIT_LOCK:
+        _prune_rate_limit_state(now)
+        used_tokens = _current_window_tokens()
+        pause_remaining = max(0.0, _PAUSE_UNTIL - now)
+        next_request_wait = max(0.0, _NEXT_REQUEST_AT - now, pause_remaining)
+        return {
+            "tpm_limit": GEMINI_TPM_LIMIT,
+            "rpm_limit": GEMINI_RPM_LIMIT,
+            "estimated_tokens_used_last_minute": used_tokens,
+            "estimated_tokens_remaining_last_minute": (
+                max(0, GEMINI_TPM_LIMIT - used_tokens) if GEMINI_TPM_LIMIT > 0 else None
+            ),
+            "requests_used_last_minute": len(_REQUEST_TIMESTAMPS),
+            "min_request_interval_seconds": GEMINI_MIN_REQUEST_INTERVAL_SECONDS,
+            "max_wait_seconds": GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS,
+            "cooldown_remaining_seconds": round(pause_remaining, 2),
+            "next_request_wait_seconds": round(next_request_wait, 2),
+            "consecutive_429s": _CONSECUTIVE_429S,
+        }
+
+
 def _build_keyword_context_block(keyword_context):
     if not keyword_context or not keyword_context.get("found"):
         return ""
-    resource = (keyword_context.get("resources") or [{}])[0]
-    matched_terms = ", ".join(resource.get("matched_terms", [])[:3]) or "none"
-    first_step = _compact_text((resource.get("steps") or [""])[0], 70) or "none"
-    return (
-        "\nKB hint: "
-        f"{resource.get('title', 'Microsoft issue')}; terms: {matched_terms}; "
-        f"check: {first_step}\n"
-    )
+    lines = [
+        "KB context. Use it to ground troubleshooting, but write a fresh concise answer. Do not quote it verbatim."
+    ]
+    for index, resource in enumerate((keyword_context.get("resources") or [])[:2], start=1):
+        matched_terms = ", ".join(resource.get("matched_terms", [])[:5]) or "none"
+        steps = [
+            _compact_text(step, 90)
+            for step in (resource.get("steps") or [])[:3]
+            if str(step).strip()
+        ]
+        advanced_steps = [
+            _compact_text(step, 90)
+            for step in (resource.get("advanced_steps") or [])[:2]
+            if str(step).strip()
+        ]
+        line = (
+            f"{index}. {resource.get('service', 'microsoft 365')} / "
+            f"{resource.get('intent', 'unknown')} / {resource.get('title', 'Microsoft issue')}. "
+            f"Matched: {matched_terms}. Checks: {' | '.join(steps) or 'none'}."
+        )
+        if advanced_steps:
+            line += f" Deeper checks: {' | '.join(advanced_steps)}."
+        lines.append(line)
+    return "\n" + "\n".join(lines) + "\n"
 
 
 def _build_thread_memory_block(thread_memory):
@@ -196,7 +391,8 @@ Password prompts inside Outlook, Teams, OneDrive, or Microsoft 365 apps should u
 Never ask the user to share passwords, verification codes, recovery codes, or other secrets.
 Map meeting audio/video with Teams mention to teams; file sync/cloud backup to onedrive; device, driver, install, printer, dock, Bluetooth, USB, Wi-Fi, monitor, mic, webcam, headset to windows unless a better Microsoft app fit is obvious.
 Never use hardware words as the service value. Physical damage or power failure is out of scope.
-Use KB hints only as backup.
+Use KB context as the grounded troubleshooting source when it matches the app and symptom. Adapt it to the user's wording; do not copy every step blindly.
+Never include URLs or tell the user to go read an article. Provide the fix path directly in the reply.
 needs_ticket and needs_description must be booleans.
 service values: teams, outlook, onedrive, sharepoint, excel, word, powerpoint, windows, microsoft account, microsoft 365, unknown
 intent values: password_reset, sign_in, sync, crash, status, outage, escalation, email_delivery, permissions, device_setup, audio, video, display, printing, unknown
@@ -293,7 +489,7 @@ def _sanitize_result(raw_result, service_hint=None):
     }
 
 
-def _call_gemini_api(prompt):
+def _call_gemini_api(prompt, estimated_tokens=None):
     if not GEMINI_API_KEY:
         return None, "no_api_key"
     url = f"{_GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
@@ -311,25 +507,52 @@ def _call_gemini_api(prompt):
         }
     body = json.dumps(payload).encode("utf-8")
     req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with urlopen(req, timeout=GEMINI_TIMEOUT_SECONDS) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        candidates = data.get("candidates") or []
-        if not candidates:
-            return None, "empty_candidates"
-        text = (
-            candidates[0]
-            .get("content", {})
-            .get("parts", [{}])[0]
-            .get("text", "")
-        )
-        return text, None
-    except HTTPError as exc:
-        return None, f"http_error_{exc.code}"
-    except (URLError, SocketTimeout, TimeoutError) as exc:
-        return None, f"timeout_or_network: {exc}"
-    except Exception as exc:
-        return None, str(exc)
+    attempts = max(1, GEMINI_RATE_LIMIT_RETRIES + 1)
+    estimated_tokens = estimated_tokens or _estimated_request_tokens(prompt)
+
+    for attempt in range(attempts):
+        wait_seconds, wait_error = _reserve_gemini_capacity(estimated_tokens)
+        if wait_error:
+            return None, wait_error
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
+
+        try:
+            opener = build_opener(ProxyHandler({})) if GEMINI_BYPASS_PROXY else None
+            open_request = opener.open if opener else urlopen
+            with open_request(req, timeout=GEMINI_TIMEOUT_SECONDS) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            candidates = data.get("candidates") or []
+            if not candidates:
+                return None, "empty_candidates"
+            text = (
+                candidates[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text", "")
+            )
+            _record_gemini_success()
+            return text, None
+        except HTTPError as exc:
+            if exc.code == 429:
+                error_body = exc.read().decode("utf-8", errors="replace")
+                retry_after = (
+                    _parse_retry_after(exc.headers)
+                    or _parse_retry_delay_from_error_body(error_body)
+                )
+                cooldown = retry_after if retry_after is not None else GEMINI_429_COOLDOWN_SECONDS
+                _record_rate_limit_429(cooldown)
+                if attempt < attempts - 1 and cooldown <= GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS:
+                    time.sleep(cooldown)
+                    continue
+                return None, _quota_error_label(error_body)
+            return None, f"http_error_{exc.code}"
+        except (URLError, SocketTimeout, TimeoutError) as exc:
+            return None, f"timeout_or_network: {exc}"
+        except Exception as exc:
+            return None, str(exc)
+
+    return None, "rate_limited_429"
 
 
 def get_gemini_health_status():
@@ -341,6 +564,8 @@ def get_gemini_health_status():
         "model": GEMINI_MODEL,
         "max_tokens": GEMINI_MAX_TOKENS,
         "thinking_budget": GEMINI_THINKING_BUDGET,
+        "bypass_proxy": GEMINI_BYPASS_PROXY,
+        "rate_limit": get_gemini_rate_limit_status(),
     }
 
 
@@ -363,7 +588,8 @@ def generate_triage_response(message, service_hint=None, conversation_history=No
         session_summary=session_summary,
     )
 
-    text, err = _call_gemini_api(prompt)
+    estimated_tokens = _estimated_request_tokens(prompt)
+    text, err = _call_gemini_api(prompt, estimated_tokens=estimated_tokens)
     if err:
         print(f"[gemini_provider] API error: {err}")
         return None, err

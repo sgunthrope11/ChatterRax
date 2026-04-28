@@ -9,7 +9,6 @@ if str(_ROOT_DIR) not in sys.path:
 
 from providers.knowledge_provider import retrieve_support_plan
 from providers.gemini_provider import generate_triage_response
-from providers.support_link_router import retrieve_support_link_plan
 from triage_core.detection import (
     canonical_service as _canonical_service_core,
     contains_any as _contains_any_core,
@@ -71,6 +70,17 @@ STRONG_OUTAGE_TERMS = (
     "major outage",
 )
 
+SERVICE_DOWN_TERMS = (
+    "is down",
+    "are down",
+    "went down",
+    "currently down",
+    "down right now",
+    "down now",
+    "not available",
+    "unavailable",
+)
+
 HIGH_PRIORITY_TERMS = (
     "everyone",
     "everybody",
@@ -95,6 +105,21 @@ HIGH_PRIORITY_TERMS = (
     "exec meeting",
 )
 
+URGENT_HANDOFF_TERMS = (
+    "now",
+    "right now",
+    "immediately",
+    "urgent",
+    "asap",
+    "emergency",
+    "critical",
+    "p1",
+    "sev1",
+    "cannot wait",
+    "can't wait",
+    "cant wait",
+)
+
 WORK_STOPPAGE_TERMS = (
     "cannot work",
     "can't work",
@@ -104,9 +129,42 @@ WORK_STOPPAGE_TERMS = (
     "stopped me from working",
     "need this for work",
     "locked out",
+    "blocking my work",
+    "blocking work",
+    "work is blocked",
+    "cannot use",
+    "can't use",
+    "cant use",
+    "cannot access",
+    "can't access",
+    "cant access",
+    "cannot get in",
+    "can't get in",
+    "cant get in",
+    "cannot send",
+    "can't send",
+    "cant send",
+    "cannot join",
+    "can't join",
+    "cant join",
     "cannot sign in at all",
     "can't sign in at all",
     "cant sign in at all",
+)
+
+BUSINESS_CRITICAL_TERMS = (
+    "payroll",
+    "client",
+    "customer",
+    "deadline",
+    "meeting",
+    "class",
+    "exam",
+    "presentation",
+    "interview",
+    "production",
+    "prod",
+    "revenue",
 )
 
 CONTEXT_FOLLOW_UP_TERMS = (
@@ -145,7 +203,7 @@ QUEUE_HANDOFF_TERMS = (
 FALSE_MULTI_TEAM_HARDWARE_TERMS = {
     "mic", "microphone", "camera", "webcam",
     "audio input", "audio output", "sound", "video",
-    "mute", "screen", "scren", "sreen", "display",
+    "mute", "muted", "screen", "screeen", "scren", "sreen", "display",
     "camra", "camrea", "camerra", "cmaera",
 }
 
@@ -156,8 +214,6 @@ FALSE_MULTI_OFFICE_HARDWARE_TERMS = {
 }
 
 OFFICE_FILE_SERVICES = {"word", "excel", "powerpoint"}
-
-LOCAL_KB_DIRECT_CONFIDENCE = 0.58
 
 PRINTING_REQUEST_TERMS = (
     "print",
@@ -198,6 +254,10 @@ LOW_PRIORITY_TERMS = (
 )
 
 WEB_LINK_RE = re.compile(r"\s*https?://\S+")
+ERROR_CODE_RE = re.compile(
+    r"\b(?:0x[0-9a-f]{3,8}|[a-z]{2,}[a-z0-9]*\d{3,}|[a-z]\d{5,})\b",
+    re.IGNORECASE,
+)
 AMBIGUOUS_ERROR_CODE_RE = re.compile(
     r"\b[a-z]{2,}(?:[-\s]?\d{2,})\b|\b[a-z]{1,3}-\d{2,}\b"
 )
@@ -271,44 +331,57 @@ SERVICE_KEYWORDS = {
         "teems", "msteams", "team chat",
         "meeting", "meetings", "video call",
         "conference call", "meetng", "meetngs", "chat",
+        "webinar", "breakout room", "breakout rooms",
+        "live captions", "caption", "captions", "teams phone",
+        "desk device", "user policy",
         "tems", "temas", "tema", "teeams", "tms", "team app", "teams app",
     ),
     "outlook": (
         "outlook", "exchange", "mail", "email", "inbox",
         "e-mail", "emails", "mails", "mailbox", "calendar",
         "calender", "calendar invite", "outlok", "otlook", "hotmail",
+        "shared mailbox", "delegate", "delegates", "focused inbox",
+        "mail rule", "rules", "archive", "sent items",
         "outloo", "outllok", "ourlook", "outlokk", "outlookk", "outloook",
     ),
     "onedrive": (
         "onedrive", "one drive", "one-drive", "1drive",
         "one drv", "onedrv", "cloud files", "filez",
         "files on demand", "backup",
+        "personal vault", "storage full", "storage quota",
         "wnedrive", "onedirve", "ondrve", "onedrvie", "1 drive",
     ),
     "sharepoint": (
         "sharepoint", "share point", "sharept", "sharepoint site",
+        "document library", "checked out", "checkout", "metadata",
+        "recycle bin", "required metadata",
         "sharepont", "shaerpoint", "shairpoint", "shaepoint", "sharepiont",
     ),
     "excel": (
         "excel", "excell", "spreadsheet", "spread sheet",
         "worksheet", "workbook", "xls", "xlsx", "csv",
+        "power query", "query", "external links", "linked workbook",
+        "coauthor", "co-author", "same cells",
         "exel", "excle", "exsel", "exell", "excelsheet", "excel sheet",
     ),
     "word": (
         "word", "microsoft word", "ms word", "docx",
         "word doc", "word document", "document", "doc file",
+        "protected view", "sensitivity label", "normal template",
         "wrd", "wird", "wrord", "microsoft wrd",
     ),
     "powerpoint": (
         "powerpoint", "power point", "ppt", "powerpt",
         "powerpint", "pptx", "slide deck", "presentation",
         "slideshow", "slides",
+        "morph", "embedded fonts", "presenter remote",
         "powerpont", "powrpoint", "pwerpoint", "powepoint", "power pnt", "powerppt",
     ),
     "windows": (
         "windows", "win10", "win11", "windows 10",
         "windows 11", "winodws", "windws", "windows login", "windows sign in",
         "windows settings", "device manager", "file explorer",
+        "windows hello", "mapped drive", "default printer", "vpn",
         "file explor", "taskbar", "start menu",
         "windoes", "widnows", "wndows", "windos", "windwos",
     ),
@@ -825,28 +898,28 @@ SERVICE_LABELS = {
 }
 
 SERVICE_FOLLOW_UPS = {
-    "teams": "For Teams, the fastest clue is whether this happens in a meeting, chat, sign-in, or device settings.",
-    "outlook": "For Outlook, tell me whether mail, calendar, search, sign-in, or sending is the part that is failing.",
-    "onedrive": "For OneDrive, the key detail is whether files are stuck syncing, missing, not uploading, or not opening.",
-    "sharepoint": "For SharePoint, I need to know whether the site opens, the file opens, or the link says you do not have access.",
-    "excel": "For Excel, tell me whether one workbook is broken or every spreadsheet is crashing or showing the same error.",
-    "word": "For Word, the useful clue is whether the document will not open, will not save, or freezes after opening.",
-    "powerpoint": "For PowerPoint, tell me whether the deck will not open, media has no sound, or the app closes during presenting.",
-    "windows": "For Windows, tell me whether this is sign-in, display, sound, Bluetooth, printer, or another device setting.",
-    "microsoft account": "For the Microsoft account, tell me whether the blocker is password, Authenticator, verification code, or account recovery.",
-    "microsoft 365": "Name the app if you can. If not, describe what you clicked and what showed up next.",
+    "teams": "Tell me whether Teams failed during sign-in, joining a meeting, chat/messages, or audio/video devices.",
+    "outlook": "Tell me whether Outlook failed while sending, receiving, opening mail, searching, using calendar, or signing in.",
+    "onedrive": "Tell me whether OneDrive shows a red X, pending sync, missing files, upload failure, or a file that will not open.",
+    "sharepoint": "Tell me whether SharePoint blocked the site, the file, editing, sync, or the sharing link.",
+    "excel": "Tell me whether Excel is failing for one workbook, saving/AutoSave, formulas/links, formatting, or the whole app.",
+    "word": "Tell me whether Word is failing to open, save, upload, format the document, or stay responsive.",
+    "powerpoint": "Tell me whether PowerPoint is failing to open the deck, play media, present, save, or stay open.",
+    "windows": "Tell me whether Windows is blocking sign-in, display, sound, Bluetooth, printer, update, or another device setting.",
+    "microsoft account": "Tell me whether the Microsoft account blocker is password, verification code, Authenticator, recovery, or a sign-in loop.",
+    "microsoft 365": "Name the app if you can. If not, tell me what you clicked, what appeared, and any exact code or wording.",
 }
 
 SERVICE_REPLY_OPENERS = {
-    "teams": "Teams can be picky about cached sessions and device choices, so start here.",
-    "outlook": "For Outlook, first check whether the same behavior happens in Outlook on the web or only in the desktop app.",
-    "onedrive": "OneDrive usually needs us to verify the account, then restart sync cleanly.",
-    "sharepoint": "SharePoint access problems usually come down to account context or permissions on the link.",
-    "excel": "Excel issues are easiest to isolate by checking whether it is one file or the whole app.",
-    "word": "For Word, protect the document first, then test whether the save/open problem follows the file.",
-    "powerpoint": "PowerPoint problems usually split into deck issues, media issues, or app startup issues.",
-    "windows": "For Windows, start with the local setting or device state before assuming the app is broken.",
-    "microsoft account": "Account prompts can loop when the password, verification method, or browser session is out of sync.",
+    "teams": "For Teams, the next step depends on whether this is the meeting, messaging, sign-in, or device path.",
+    "outlook": "For Outlook, the useful split is webmail versus desktop Outlook, then the specific mail action that failed.",
+    "onedrive": "For OneDrive, start with the sync client state and the exact file status before changing the file.",
+    "sharepoint": "For SharePoint, check the browser view and account permissions before assuming the file itself is damaged.",
+    "excel": "For Excel, isolate whether this follows one workbook or the whole Excel app.",
+    "word": "For Word, protect the document first, then test whether the issue follows the file or the Word app.",
+    "powerpoint": "For PowerPoint, separate deck content, media playback, presenting, and app startup before changing the file.",
+    "windows": "For Windows, start with the local setting, device state, or update screen tied to the symptom.",
+    "microsoft account": "For Microsoft account issues, keep secrets out of chat and test the official sign-in page first.",
     "microsoft 365": "Let us narrow this from the symptom instead of guessing the app.",
 }
 
@@ -877,7 +950,11 @@ INTENT_KEYWORDS = {
         "domain error", "could not be delivered",
         "couldn't be delivered", "couldnt be delivered",
         "email came back", "mail came back",
+        "send emails", "sending emails", "send outgoing",
+        "outgoing mail", "send receive", "send/receive", "smtp",
         "returned email", "returned mail",
+        "email not sending", "mail not sending",
+        "stuck in outbox", "outbox",
         "sent bak", "got sent bak", "bouncd", "recipent", "domane",
         "does not exizt", "domane does not exizt",
     ),
@@ -896,7 +973,13 @@ INTENT_KEYWORDS = {
         "logon", "log on", "sign-in", "wrong password",
         "wont accept password", "won't accept password",
         "verification code", "security code", "authenticator",
-        "permission denied",
+        "permission denied", "bitlocker", "recovery key",
+        "bitlocker recovery key", "locked drive",
+        "sso", "single sign on", "single sign-on",
+        "seamless sign in", "work or school account",
+        "conditional access", "modern authentication",
+        "web account manager", "wam", "cached token",
+        "credentials after password reset", "old alias", "old sign-in alias",
     ),
     "sync": (
         "sync", "syncing", "synced", "not syncing",
@@ -908,7 +991,11 @@ INTENT_KEYWORDS = {
         "pending", "stale", "not sending", "not send",
         "will not send", "wont send", "won't send",
         "messages not sending", "message not sending",
-        "send messages", "send message",
+        "send messages", "send message", "pivot refresh",
+        "data refresh", "refresh failed", "refresh all",
+        "refresh still failed",
+        "upload failed", "storage full", "quota", "checked out",
+        "deleted", "recycle bin", "same cells", "coauthor",
     ),
     "crash": (
         "crash", "crashes", "crashing", "crashed",
@@ -918,6 +1005,8 @@ INTENT_KEYWORDS = {
         "failed", "fails", "failure", "hang", "hung",
         "hangs",
         "blank screen", "black screen", "white screen",
+        "video is black", "black video", "media will not play",
+        "media won't play", "media wont play", "playback failed",
         "wont open", "won't open", "wont start", "won't start",
         "not opening", "will not open", "will not start",
         "force closes", "closing itself", "lagging", "slow",
@@ -930,6 +1019,7 @@ INTENT_KEYWORDS = {
         "subscrption", "ekspired", "expired lisence", "not activated",
         "unlisensed", "needs activation", "product activation",
         "activate microsoft", "unlicensed", "not licensed",
+        "activation fails", "activation failed", "activation proxy",
     ),
     "notification": (
         "notifications not working", "no notifications",
@@ -966,6 +1056,10 @@ INTENT_KEYWORDS = {
         "formatting broke", "looks weird", "looks wrong", "mangled",
         "pasted html", "paste from web", "print markup", "markup printing",
         "formula bar missing", "sheet tabs gone", "view settings",
+        "formula", "formulas", "not calculating",
+        "manual calculation", "calculate now", "recalculate",
+        "focused inbox", "live captions", "captions", "morph",
+        "embedded fonts", "normal template", "margin", "sensitivity label",
     ),
 }
 
@@ -1187,6 +1281,18 @@ OUTLOOK_CALLBACK_SYNC_TERMS = (
     "mailbox", "search", "inbox", "mail", "messages",
 )
 
+OUTLOOK_EMAIL_DELIVERY_TERMS = (
+    "email not sending", "email still not sending",
+    "mail not sending", "message not sending",
+    "not sending", "still not sending",
+    "wont send", "won't send", "will not send",
+    "cannot send", "can't send", "cant send",
+    "send failed", "send failure", "sending failed",
+    "stuck in outbox", "outbox", "not going out",
+    "undeliverable", "delivery failed", "delivery failure",
+    "bounce back", "bounced back", "came back",
+)
+
 SHAREPOINT_READ_ONLY_TERMS = (
     "read only", "readonly", "view only", "can't edit", "cant edit",
     "cannot edit", "locked for editing", "editing blocked",
@@ -1244,20 +1350,20 @@ DETAIL_HINT_TERMS = (
 # Used only by rule-based fallback - emergency responses when Gemini is down
 SHORT_STEP_RESPONSES = {
     "password_reset": [
-        "Go to the Microsoft sign-in page and choose Forgot password.",
-        "After the reset finishes, try signing in again with the new password.",
+        "Use the official Microsoft sign-in page and choose Forgot password rather than sharing any password or code here.",
+        "After the reset finishes, try the same app again so we know whether the account or the app session was the blocker.",
     ],
     "sign_in": [
-        "Try signing in at microsoft365.com first to see whether the issue affects your full Microsoft account.",
-        "If that also fails, use Microsoft's password reset page before trying again.",
+        "Try signing in at microsoft365.com first; if that fails too, the account is the blocker rather than just this app.",
+        "If the web sign-in works, sign out of the affected app and sign back in so it gets a fresh session token.",
     ],
     "sync": [
-        "Confirm you are signed in to the correct Microsoft account.",
-        "Then refresh the app or reopen it and check whether the content starts syncing again.",
+        "Confirm the affected app is using the correct work account before changing the file or mailbox.",
+        "Then refresh or restart that app and check whether the stuck item moves, sends, or updates in the web version.",
     ],
     "crash": [
-        "Close the Microsoft app fully and reopen it.",
-        "If it crashes or fails again, note the exact action and any error message you see.",
+        "Close the affected Microsoft app fully and reopen it from the Start menu rather than from a recent file.",
+        "If it fails again, note whether the crash happens at launch, when opening one item, or after a specific click.",
     ],
     "email_delivery": [
         "Check the recipient's email address for typos, extra spaces, or a misspelled domain after the @ symbol.",
@@ -1265,8 +1371,8 @@ SHORT_STEP_RESPONSES = {
         "If it still says domain not found, copy the full error text so support can verify the recipient domain.",
     ],
     "activation": [
-        "Open any Office app, go to File > Account, and sign in with the email tied to your Microsoft 365 subscription.",
-        "If already signed in and still unlicensed, sign out, restart the app, then sign back in to trigger a fresh license check.",
+        "Open the affected Office app, go to File > Account, and confirm the signed-in account is the one with the Microsoft 365 license.",
+        "If it is already signed in but still unlicensed, sign out, restart the app, then sign back in to trigger a fresh license check.",
     ],
     "notification": [
         "Check the app's notification settings first — in Teams go to Settings > Notifications, in Outlook go to File > Options > Mail.",
@@ -1281,24 +1387,24 @@ SHORT_STEP_RESPONSES = {
         "Go to Settings > Apps > Startup apps and disable anything non-essential to reduce background load on every boot.",
     ],
     "audio": [
-        "Check the app's device settings and confirm the correct microphone and speaker are selected.",
-        "Then open Settings > System > Sound and verify the same devices are selected in Windows.",
+        "Check the affected app's device settings and confirm the correct microphone and speaker are selected there.",
+        "Then open Settings > System > Sound and make sure Windows is using the same input and output devices.",
     ],
     "video": [
-        "Check the app's device settings and confirm the correct camera is selected.",
-        "Then open Settings > Privacy & security > Camera and make sure camera access is allowed for the app.",
+        "Check the affected app's device settings and confirm the correct camera is selected there.",
+        "Then open Settings > Privacy & security > Camera and make sure Windows allows that app to use the camera.",
     ],
     "display": [
-        "Check whether the issue affects the full screen, a shared screen, or a second monitor so we stay on the right display path.",
-        "Then open the app or Windows display settings and confirm the correct screen or sharing option is selected.",
+        "Check whether this is the app window, screen sharing, or a second monitor so we stay on the right display path.",
+        "Then use the app's sharing/display controls or Windows Settings > System > Display depending on where the problem appears.",
     ],
     "formatting": [
         "Start with the app's own view or layout settings so we can rule out a hidden formatting toggle before changing the file itself.",
         "If this came from pasted content or a shared file, test with a clean copy or plain-text paste so we can separate document formatting from app behavior.",
     ],
     "permissions": [
-        "Confirm you are signed in with the correct Microsoft account for the file, site, or app.",
-        "If it still says access denied, ask the owner to re-share it or verify your permissions explicitly.",
+        "Confirm you are signed in with the correct work account for that file, site, or app.",
+        "If it still says access denied, open the item in a browser and ask the owner to verify edit or view permission on that exact link.",
     ],
     "printing": [
         "Open the Print settings and confirm the correct printer is selected and online.",
@@ -1554,6 +1660,69 @@ MULTI_SERVICE_GUIDANCE = {
     "microsoft account": (
         "Microsoft account: sign in at microsoft365.com and confirm whether the "
         "password, Authenticator prompt, or verification code is the blocker."
+    ),
+}
+
+SERVICE_CAPABILITY_TERMS = {
+    "outlook": (
+        "email", "emails", "e-mail", "mail", "mailbox", "inbox",
+        "outbox", "recipient", "calendar", "invite", "meeting invite",
+        "send", "sending", "sent", "not sending", "wont send",
+        "won't send", "will not send", "cannot send", "can't send",
+        "cant send", "deliver", "delivery", "undeliverable",
+        "bounce back", "bounced back", "came back", "exchange",
+        "credential prompt", "modern authentication", "wam",
+    ),
+    "teams": (
+        "teams meeting", "meeting", "meetings", "call", "video call",
+        "chat", "channel", "screen share", "share screen", "mic",
+        "microphone", "camera", "speaker", "audio", "join",
+        "message not sending", "messages not sending", "chat not sending",
+        "not sending", "wont send", "won't send", "sign in loop",
+        "desktop app", "meeting policy",
+    ),
+    "onedrive": (
+        "onedrive", "file", "files", "folder", "folders", "sync",
+        "syncing", "upload", "uploading", "download", "downloading",
+        "cloud", "backup", "pending", "red x", "green check",
+        "available offline", "free up space",
+        "wrong tenant", "wrong account", "sync client",
+    ),
+    "sharepoint": (
+        "sharepoint", "site", "library", "document library", "link",
+        "permissions", "permission", "access denied", "read only",
+        "view only", "checked out", "metadata", "version history",
+        "restore version", "recycle bin",
+        "conditional access", "external sharing", "guest access",
+    ),
+    "word": (
+        "word", "document", "doc", "docx", "track changes", "markup",
+        "spell check", "grammar", "header", "footer", "page break",
+        "table of contents",
+    ),
+    "excel": (
+        "excel", "spreadsheet", "workbook", "worksheet", "formula",
+        "formulas", "cell", "cells", "pivot", "filter", "sheet",
+        "csv", "autosave",
+        "pivot refresh", "protected view", "trust center",
+    ),
+    "powerpoint": (
+        "powerpoint", "presentation", "slides", "slide deck", "ppt",
+        "pptx", "present", "presenting", "slideshow", "animation",
+        "speaker notes", "embedded video", "slide master", "template",
+    ),
+    "windows": (
+        "windows", "pc", "computer", "laptop", "printer", "scanner",
+        "screen", "monitor", "display", "wifi", "wi-fi", "bluetooth",
+        "keyboard", "mouse", "touchpad", "update", "taskbar",
+        "start menu", "file explorer", "bitlocker",
+        "work or school account", "vpn", "dns", "device registration",
+    ),
+    "microsoft account": (
+        "password", "sign in", "signin", "login", "authenticator",
+        "verification code", "security code", "mfa", "2fa",
+        "account recovery", "locked out", "recovery email",
+        "sso", "single sign on", "single sign-on", "mfa",
     ),
 }
 
@@ -2726,6 +2895,57 @@ def _should_clarify_current_application(message, history_context, related_match,
     )
 
 
+def _capability_history_match(message, history_context, thread_memory):
+    prior_services = []
+
+    def add_prior(service):
+        canonical = _canonical_service(service)
+        if canonical and canonical != "microsoft 365" and canonical not in prior_services:
+            prior_services.append(canonical)
+
+    for service in history_context.get("services_mentioned") or []:
+        add_prior(service)
+    for thread in (thread_memory or {}).get("threads") or []:
+        add_prior(thread.get("service"))
+
+    if not prior_services:
+        return {
+            "service": None,
+            "score": 0,
+            "matched_terms": [],
+        }
+
+    scored = []
+    for service in prior_services:
+        terms = SERVICE_CAPABILITY_TERMS.get(service, ())
+        matched_terms = [term for term in terms if _term_in_text(message, term)]
+        if not matched_terms:
+            continue
+        scored.append({
+            "service": service,
+            "score": len(matched_terms),
+            "matched_terms": matched_terms,
+        })
+
+    if not scored:
+        return {
+            "service": None,
+            "score": 0,
+            "matched_terms": [],
+        }
+
+    scored.sort(key=lambda item: item["score"], reverse=True)
+    best = scored[0]
+    second_score = scored[1]["score"] if len(scored) > 1 else 0
+    if best["score"] <= second_score:
+        return {
+            "service": None,
+            "score": best["score"],
+            "matched_terms": best["matched_terms"],
+        }
+    return best
+
+
 def _should_inherit_recent_service(
     message,
     history_context,
@@ -2828,7 +3048,8 @@ def _refine_multi_issue_context(message, service, multi_context, explicit_servic
             message,
             (
                 "meeting", "call", "camera", "mic", "mute", "audio",
-                "video", "black", "hear", "screen share", "presenting",
+                "video", "black", "hear", "screen share", "screen sharing",
+                "sharing screen", "presenting",
             ),
         )
     ):
@@ -2943,25 +3164,6 @@ def _refine_multi_issue_context(message, service, multi_context, explicit_servic
     return multi_context
 
 
-def _should_answer_from_local_knowledge(keyword_context, multi_context,
-                                        escalation_requested=False,
-                                        awaiting_ticket_detail=False,
-                                        user_is_correcting=False):
-    if escalation_requested or awaiting_ticket_detail or user_is_correcting:
-        return False
-    if multi_context.get("is_multi"):
-        return False
-    if not keyword_context or not keyword_context.get("found"):
-        return False
-    resources = keyword_context.get("resources") or []
-    if not resources:
-        return False
-    primary = resources[0]
-    confidence = float(keyword_context.get("confidence") or 0.0)
-    matched_terms = primary.get("matched_terms") or []
-    return confidence >= LOCAL_KB_DIRECT_CONFIDENCE and len(matched_terms) >= 2
-
-
 def _thread_for_service(thread_memory, service):
     for thread in (thread_memory or {}).get("threads", []):
         if thread.get("service") == service:
@@ -3034,30 +3236,6 @@ def _queued_issue_handoff_payload(service, thread):
     snippet_intent = _detect_intent(_normalize_message(snippet)) if snippet else "unknown"
     if snippet_intent != "unknown":
         last_intent = snippet_intent
-
-    if snippet:
-        snippet_knowledge = retrieve_support_plan(
-            snippet,
-            service_hint=service,
-            intent_hint=last_intent,
-            min_confidence=LOCAL_KB_DIRECT_CONFIDENCE,
-            max_resources=1,
-        )
-        if snippet_knowledge.get("found") and snippet_knowledge.get("resources"):
-            primary_resource = snippet_knowledge["resources"][0]
-            blocks = [
-                f"Switching to {service_label}.",
-                "I kept the earlier issue context for this app, so we can pick it back up without starting over.",
-                f"Earlier you mentioned: \"{snippet}\"",
-                _build_primary_knowledge_reply(primary_resource),
-            ]
-            return {
-                "reply": _build_block_reply(blocks),
-                "intent": primary_resource.get("intent") or last_intent or "unknown",
-                "knowledge_retrieved": True,
-                "knowledge_source": "local_context",
-                "knowledge_confidence": snippet_knowledge.get("confidence", 0.0),
-            }
 
     if (
         last_intent == "update"
@@ -3336,19 +3514,6 @@ def _build_guided_reply(intro, steps=None, wrap_up=""):
     return _build_block_reply(blocks)
 
 
-def _build_primary_knowledge_reply(resource):
-    title = str(resource.get("title") or "this Microsoft issue").strip()
-    steps = [str(step).strip() for step in (resource.get("steps") or []) if str(step).strip()]
-    if not steps:
-        return f"This lines up with {title}. Tell me the exact wording on screen and I will adjust the path."
-
-    lines = [f"This lines up with {title}.", "Try these checks first:"]
-    for index, step in enumerate(steps[:4], start=1):
-        lines.append(f"{index}. {step}")
-    lines.append("If your screen looks different, send me the exact wording you see and I will adjust the path.")
-    return _build_block_reply(lines)
-
-
 def _service_label_list(items):
     labels = []
     seen = set()
@@ -3421,23 +3586,72 @@ def _build_thread_summary(service, intent, priority, next_issue_options=None, th
     return json.dumps(summary_payload, ensure_ascii=True, separators=(",", ":"))
 
 
+def _has_low_priority_context(message, service):
+    lower_msg = str(message or "").lower()
+    if _contains_any(lower_msg, LOW_PRIORITY_TERMS):
+        return True
+    if service == "outlook" and _contains_any(lower_msg, ("signature", "desktop alert", "notification", "notifications")):
+        return True
+    if service == "teams" and _contains_any(lower_msg, ("banner", "banners", "notification", "notifications")):
+        return True
+    if service in {"word", "excel", "powerpoint"} and _contains_any(
+        lower_msg,
+        ("theme", "dark mode", "formatting", "format", "font", "layout", "template"),
+    ):
+        return True
+    return False
+
+
+def _has_high_impact_context(message):
+    lower_msg = str(message or "").lower()
+    return (
+        _contains_any(lower_msg, HIGH_PRIORITY_TERMS)
+        or _contains_any(lower_msg, WORK_STOPPAGE_TERMS)
+        or _contains_any(lower_msg, BUSINESS_CRITICAL_TERMS)
+    )
+
+
+def _has_service_down_context(message):
+    lower_msg = str(message or "").lower()
+    if _contains_any(lower_msg, STRONG_OUTAGE_TERMS):
+        return True
+    if _contains_any(lower_msg, SERVICE_DOWN_TERMS):
+        return True
+    return False
+
+
 def _infer_priority(message, service, intent, multi_context=None):
     msg = str(message or "")
     lower_msg = msg.lower()
     multi_context = multi_context or {}
+    low_priority_context = _has_low_priority_context(lower_msg, service)
+    high_impact_context = _has_high_impact_context(lower_msg)
+    service_down_context = _has_service_down_context(lower_msg)
+    urgent_handoff = _contains_any(lower_msg, URGENT_HANDOFF_TERMS)
+    explicit_handoff = _detect_escalation_request(lower_msg)
+    critical_service = service in {"teams", "outlook", "windows", "microsoft account", "microsoft 365"}
 
     if _contains_any(lower_msg, STRONG_OUTAGE_TERMS):
         return "high"
 
-    if _contains_any(lower_msg, HIGH_PRIORITY_TERMS):
+    if low_priority_context and not high_impact_context and not service_down_context:
+        return "low"
+
+    if service_down_context and critical_service:
+        return "high"
+
+    if high_impact_context:
         if _contains_any(lower_msg, ("everyone", "everybody", "all users", "multiple users", "many users")):
             return "high"
-        if service in {"teams", "outlook", "windows", "microsoft account", "microsoft 365"}:
+        if critical_service:
             return "high"
 
     if _contains_any(lower_msg, WORK_STOPPAGE_TERMS):
-        if service in {"teams", "outlook", "windows", "microsoft account", "microsoft 365"}:
+        if critical_service:
             return "high"
+
+    if urgent_handoff and explicit_handoff and critical_service and not low_priority_context:
+        return "high"
 
     if (
         service == "microsoft account"
@@ -3456,19 +3670,7 @@ def _infer_priority(message, service, intent, multi_context=None):
     if multi_context.get("is_multi"):
         return "medium"
 
-    if _contains_any(lower_msg, LOW_PRIORITY_TERMS):
-        return "low"
-
-    if service == "outlook" and _contains_any(lower_msg, ("signature", "desktop alert", "notification", "notifications")):
-        return "low"
-
-    if service == "teams" and _contains_any(lower_msg, ("banner", "banners", "notification", "notifications")):
-        return "low"
-
-    if service in {"word", "excel", "powerpoint"} and _contains_any(
-        lower_msg,
-        ("theme", "dark mode", "formatting", "format", "font", "layout", "template"),
-    ):
+    if low_priority_context:
         return "low"
 
     return "medium"
@@ -3517,6 +3719,138 @@ def _service_specific_prompt(service):
 def _strip_web_links(reply):
     """Keep model replies focused on steps; link fallback is handled separately."""
     return WEB_LINK_RE.sub("", str(reply or "")).strip()
+
+
+def _extract_error_codes(message):
+    seen = set()
+    codes = []
+    for match in ERROR_CODE_RE.findall(str(message or "")):
+        code = str(match).strip()
+        normalized = code.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        codes.append(code)
+    return codes[:3]
+
+
+def _is_error_code_focused_message(message):
+    text = str(message or "").strip()
+    codes = _extract_error_codes(text)
+    if not codes:
+        return False
+    remainder = ERROR_CODE_RE.sub(" ", text)
+    remainder = re.sub(
+        r"\b(?:error|code|err|it|is|says|said|showed|shows|this|that|the|number|message)\b",
+        " ",
+        remainder,
+        flags=re.IGNORECASE,
+    )
+    remainder = re.sub(r"[^a-z0-9]+", " ", remainder.lower()).strip()
+    return not remainder or len(text.split()) <= 5
+
+
+def _context_service_for_error_code(history_context, related_match, service):
+    for candidate in (
+        history_context.get("current_focus"),
+        history_context.get("last_service"),
+        related_match.get("service"),
+        service,
+    ):
+        canonical = _canonical_service(candidate)
+        if canonical and canonical != "microsoft 365":
+            return canonical
+    return "microsoft 365"
+
+
+def _context_intent_for_service(thread_memory, service, fallback_intent):
+    thread = _thread_for_service(thread_memory, service)
+    thread_intent = (thread or {}).get("last_intent")
+    if thread_intent and thread_intent != "unknown":
+        return thread_intent
+    return fallback_intent if fallback_intent and fallback_intent != "unknown" else "unknown"
+
+
+def _error_code_reply(service, intent, codes, has_context=True):
+    code_text = ", ".join(codes)
+    service_label = _service_label(service)
+    if not has_context or service == "microsoft 365":
+        return _build_reply([
+            f"That code ({code_text}) is useful, but I need the Microsoft app before I map it to a fix.",
+            "Tell me which app showed it and what you clicked right before it appeared.",
+        ])
+
+    context_line = (
+        f"Got it, I am keeping this on the {service_label} issue. "
+        f"The code {code_text} helps, but the app and action matter more than the number by itself."
+    )
+
+    guidance = {
+        "teams": [
+            context_line,
+            "If this happened in Teams desktop, try the same action in Teams on the web. If web works, fully quit Teams and reopen it before clearing cache.",
+            "If it happened while joining or signing in, tell me that step so we do not treat a meeting error like a chat error.",
+        ],
+        "outlook": [
+            context_line,
+            "First try the same send/receive action in Outlook on the web. If webmail works, the issue is likely desktop Outlook, its profile, or the local connection.",
+            "If webmail also fails, keep the full error text because support will need the server or recipient detail behind the code.",
+        ],
+        "onedrive": [
+            context_line,
+            "Open the OneDrive cloud icon and check the activity panel for the file or folder that is failing. Pause and resume sync once after confirming the right account.",
+            "If the file opens in the browser but not locally, the local sync client is the likely path; if the browser fails too, it is probably permission or file access.",
+        ],
+        "sharepoint": [
+            context_line,
+            "Open the SharePoint file or site in a browser or private window and confirm you are signed in with the expected work account.",
+            "If the browser also shows the code, capture the link type and whether it says view-only, access denied, or site unavailable.",
+        ],
+        "excel": [
+            context_line,
+            "Open Excel first without the workbook. If Excel opens normally, use File > Open to load the workbook and see whether the code follows that one file.",
+            "If every workbook shows the code, test Excel safe mode before changing the file.",
+        ],
+        "word": [
+            context_line,
+            "Open Word first without the document. If Word is fine, use File > Open and Save As to test whether the code follows that document or save location.",
+            "If Word itself shows the code before any document opens, the app or account state is the better path.",
+        ],
+        "powerpoint": [
+            context_line,
+            "Open PowerPoint first without the deck. If that works, open the deck with File > Open and note whether the code appears on one slide, media file, or while presenting.",
+            "If PowerPoint shows the code before a deck opens, test app repair or account sign-in before editing the presentation.",
+        ],
+        "windows": [
+            context_line,
+            "Match the code to the Windows screen where it appeared: sign-in, update, display/device, or printer settings. Start by repeating the exact action once and capture the full wording.",
+            "If this came from Windows Update, use Settings > Windows Update > Update history so support can see the failed update name with the code.",
+        ],
+        "microsoft account": [
+            context_line,
+            "Do not send passwords, verification codes, recovery codes, or Authenticator codes here. Try the same sign-in in a private browser window at microsoft365.com.",
+            "If the code appears again, tell me whether it was password, verification, Authenticator, or account recovery so we keep the next step safe.",
+        ],
+    }
+
+    lines = guidance.get(service)
+    if not lines:
+        lines = [
+            context_line,
+            f"Try the same action in the web version if {service_label} has one, then tell me whether the code appears there too.",
+            "If it only appears in the desktop app, the next path is usually app cache, account sign-in, or repair rather than a new ticket immediately.",
+        ]
+
+    if intent == "email_delivery" and service == "outlook":
+        lines[1] = (
+            "First try sending the same message from Outlook on the web. If webmail sends, desktop Outlook likely cannot reach the outgoing mail path or local profile cleanly."
+        )
+    elif intent == "sync" and service in {"onedrive", "sharepoint", "outlook"}:
+        lines.append("If the web version is current but the desktop copy is not, treat this as a local sync/cache problem first.")
+    elif intent == "sign_in":
+        lines.append("If this is blocking urgent work or the web sign-in fails too, say ticket and I will capture it with the right priority.")
+
+    return _build_reply(lines)
 
 
 def _should_defer_ambiguous_surface_to_gemini(
@@ -3572,28 +3906,6 @@ def _should_defer_ambiguous_surface_to_gemini(
         "excel",
         "powerpoint",
     } or bool(fuzzy_service)
-
-
-def _should_use_support_link_fallback(service, intent, detailed_enough,
-                                      hardware_context, model_error, message=""):
-    if not model_error:
-        return False
-    if not service or service == "microsoft 365":
-        return False
-    if intent != "unknown":
-        return False
-    if hardware_context.get("has_hardware_term"):
-        return False
-    # If the user typed 3 words or fewer they have not described a scenario yet.
-    # A bare service name like "teams" or "outlook help" should go to
-    # _service_specific_prompt() to ask what is wrong, not return a generic link.
-    if len(str(message or "").split()) <= 3:
-        return False
-    # If the user described a scenario but the knowledge base has no match,
-    # fire the link router so they get the most relevant official Microsoft page.
-    # detailed_enough is intentionally NOT blocking here — a described scenario
-    # that the knowledge base missed is exactly when the link is most useful.
-    return True
 
 
 def _wrap_up_for(service, intent):
@@ -3692,6 +4004,458 @@ def _rule_based_step_reply(service, intent):
         reply_lines,
         _wrap_up_for(service, intent),
     )
+
+
+def _specialized_niche_reply(message):
+    """Narrow deterministic replies for niche cases that should not need Gemini."""
+    msg = _normalize_message(message)
+
+    if _contains_any(msg, ("forwarding", "forward", "archive")) and _contains_any(msg, ("rule", "rules", "boss", "mail")):
+        return {
+            "service": "outlook",
+            "intent": "sync",
+            "reply": _build_guided_reply(
+                "That sounds like an Outlook rule or mailbox rule is moving mail before you see it.",
+                [
+                    "In Outlook on the web, open Settings > Mail > Rules and check for forwarding, move-to-folder, or delete rules.",
+                    "Also check desktop Outlook rules because client-only rules can move mail even when web rules look clean.",
+                    "Search the Archive folder for one affected sender, then disable the matching rule before moving messages back.",
+                ],
+                "If you cannot find the rule in either place, say ticket and include one sender plus the folder where the mail lands.",
+            ),
+        }
+
+    if _contains_any(msg, ("shared mailbox", "sent items")):
+        return {
+            "service": "outlook",
+            "intent": "sync",
+            "reply": _build_guided_reply(
+                "Shared mailbox sent mail can save to the sender mailbox instead of the shared mailbox.",
+                [
+                    "First check your own Sent Items for one missing message to confirm where Outlook stored it.",
+                    "Try sending from Outlook on the web through the shared mailbox and compare where that copy lands.",
+                    "If web behaves the same way, an admin likely needs to enable shared mailbox sent-item copy behavior.",
+                ],
+                "If you open a ticket, include the shared mailbox address and whether Send As or Send on Behalf was used.",
+            ),
+        }
+
+    if _contains_any(msg, ("delegate", "private meeting", "private meetings", "my calendar")):
+        return {
+            "service": "outlook",
+            "intent": "permissions",
+            "reply": _build_guided_reply(
+                "Outlook delegate calendar limits usually come from delegate permissions or private-item visibility.",
+                [
+                    "Open Outlook calendar permissions and confirm the delegate has the expected role, not only reviewer access.",
+                    "If private meetings are involved, check whether the delegate is allowed to view private items.",
+                    "Have the delegate test in Outlook on the web so we can separate a mailbox permission issue from desktop cache.",
+                ],
+                "If permissions look correct but it still fails, a ticket should include both mailbox names and the exact calendar action blocked.",
+            ),
+        }
+
+    if _contains_any(msg, ("focused inbox",)):
+        return {
+            "service": "outlook",
+            "intent": "formatting",
+            "reply": _build_guided_reply(
+                "Focused Inbox can disappear when the mailbox type, view, or migration state changes.",
+                [
+                    "Check View > Show Focused Inbox in Outlook desktop, then check the same mailbox in Outlook on the web.",
+                    "If it is missing in both places after migration, confirm the mailbox is fully moved and still licensed for Exchange Online.",
+                    "If it only disappears on desktop, reset the Outlook view or rebuild the profile after confirming web is correct.",
+                ],
+                "If this needs a ticket, include whether Focused Inbox is missing in web, desktop, or both.",
+            ),
+        }
+
+    if _contains_any(msg, ("alias", "old sign-in", "old signin", "old one")) and _contains_any(msg, ("outlook", "prompts", "prompt", "sign-in")):
+        return {
+            "service": "outlook",
+            "intent": "sign_in",
+            "reply": _build_guided_reply(
+                "Outlook can keep prompting for an old alias when cached Office credentials still point at the previous sign-in name.",
+                [
+                    "Sign into microsoft365.com with the new alias first to confirm the account itself accepts it.",
+                    "In Outlook, go to File > Account and sign out of the old account entry, then close all Office apps.",
+                    "Open Windows Credential Manager and remove stale Office or Outlook credentials that show the old alias, then reopen Outlook and sign in fresh.",
+                ],
+                "If the old alias still appears after that, check whether the old address remains as the mailbox primary SMTP or UPN in admin settings.",
+            ),
+        }
+
+    if _contains_any(msg, ("tenant chooser", "company names", "realm mismatch", "flipping between")):
+        return {
+            "service": "microsoft 365",
+            "intent": "sign_in",
+            "reply": _build_guided_reply(
+                "That sounds like Microsoft 365 is bouncing between two tenant identities instead of settling on the right work account.",
+                [
+                    "Sign out of Microsoft 365 in the browser, then open the same page in an InPrivate window and choose the intended work account.",
+                    "In Windows, go to Settings > Accounts > Access work or school and disconnect any old tenant or stale work account you no longer use.",
+                    "If both company names are valid, confirm which tenant owns the app or file before approving the sign-in prompt again.",
+                ],
+                "If it still flips tenants, a ticket should include both tenant names and the exact app or link you were opening.",
+            ),
+        }
+
+    if _contains_any(msg, ("location does not allow confidential", "does not allow confidential", "confidential files")):
+        return {
+            "service": "microsoft 365",
+            "intent": "permissions",
+            "reply": _build_guided_reply(
+                "That sounds like a sensitivity or data-loss-prevention policy blocking where the file can be saved.",
+                [
+                    "Save the blank document to your approved OneDrive or SharePoint work location first, not a local or personal folder.",
+                    "Check the sensitivity label shown in the Office title bar or File > Info and confirm it matches the destination policy.",
+                    "If the file is truly blank, create a new blank document in the approved library and test saving there before copying content in.",
+                ],
+                "If the policy still blocks a blank file, include the destination path and label name in a ticket.",
+            ),
+        }
+
+    if _contains_any(msg, ("label mismatch", "only lets me view", "view it in the browser")):
+        return {
+            "service": "microsoft 365",
+            "intent": "permissions",
+            "reply": _build_guided_reply(
+                "A label mismatch usually means the file's sensitivity label and the app or location policy do not agree.",
+                [
+                    "Open the file in the browser and check the sensitivity label or information-protection banner.",
+                    "Confirm you are signed in with the same work account the coworker shared the file with.",
+                    "Ask the file owner to verify the label and sharing permissions before you download or edit a copy.",
+                ],
+                "If the browser is the only place it opens, a ticket should include the file location, label wording, and whether others can edit it.",
+            ),
+        }
+
+    if _contains_any(msg, ("handshake expired", "side panel", "reload does nothing")):
+        return {
+            "service": "microsoft 365",
+            "intent": "sign_in",
+            "reply": _build_reply([
+                "That sounds like an embedded Microsoft sign-in panel expired, but the app name matters before clearing the wrong cache.",
+                "Close the panel, sign out of Microsoft 365 in the browser, then reopen the same action in an InPrivate window to force a fresh sign-in.",
+                "Tell me which app or page owns the side panel, like Teams, Outlook, SharePoint, Office web, or another Microsoft app, and I can give the app-specific cache path.",
+            ]),
+        }
+
+    if _contains_any(msg, ("blue box", "action needed", "button is grey", "button is gray")):
+        return {
+            "service": "microsoft 365",
+            "intent": "unknown",
+            "reply": _build_reply([
+                "That is too little context to safely route yet, but it still sounds like a Microsoft app or browser prompt.",
+                "Tell me which app the blue box appears in and what button is greyed out.",
+                "If you can, copy the exact text in the box and what you clicked right before it appeared.",
+            ]),
+        }
+
+    if _contains_any(msg, ("live captions", "captions")):
+        return {
+            "service": "teams",
+            "intent": "audio",
+            "reply": _build_guided_reply(
+                "Teams captions use meeting language settings, so a wrong language usually is not an audio-device problem.",
+                [
+                    "In the meeting, open More > Language and speech and set the spoken language to the language people are actually using.",
+                    "Turn captions off and back on after changing the spoken language.",
+                    "If only one user sees the wrong language, have them leave and rejoin from Teams desktop instead of the browser.",
+                ],
+                "If captions are wrong for everyone, note the meeting type and organizer because policy or meeting settings may be involved.",
+            ),
+        }
+
+    if _contains_any(msg, ("teams phone", "desk device", "fetch user policy", "user policy")):
+        return {
+            "service": "teams",
+            "intent": "sign_in",
+            "reply": _build_guided_reply(
+                "A Teams phone that cannot fetch user policy is usually signed in but not receiving Teams device policy correctly.",
+                [
+                    "Restart the desk phone, then sign out and sign back in with the affected user.",
+                    "Confirm the user has the right Teams Phone license and any required calling policy assigned.",
+                    "If only that device fails, check for a firmware update or factory reset the phone before replacing policy assignments.",
+                ],
+                "A ticket should include the phone model, user account, and whether Teams desktop works for the same user.",
+            ),
+        }
+
+    if _contains_any(msg, ("webinar", "lobby")):
+        return {
+            "service": "teams",
+            "intent": "permissions",
+            "reply": _build_guided_reply(
+                "Teams webinar lobby behavior follows webinar meeting options, which can differ from normal meetings.",
+                [
+                    "Open the webinar meeting options and check Who can bypass the lobby.",
+                    "Confirm attendees are joining with the expected email identity, not as anonymous guests.",
+                    "If presenters can enter but attendees cannot, compare webinar policy and lobby settings for that event.",
+                ],
+                "If attendees remain stuck, capture the event link type and one attendee email for a ticket.",
+            ),
+        }
+
+    if _contains_any(msg, ("colon", "invalid character", "invalid characters", "filename", "file name")) and _contains_any(msg, ("onedrive", "sync")):
+        return {
+            "service": "onedrive",
+            "intent": "sync",
+            "reply": _build_guided_reply(
+                "OneDrive cannot sync some characters that a Mac may allow in filenames.",
+                [
+                    "Rename the file to remove characters like colon, asterisk, question mark, quotes, angle brackets, pipe, or trailing spaces.",
+                    "Keep the path shorter if the file is nested deeply inside folders.",
+                    "After renaming, pause and resume OneDrive sync so the client retries the file.",
+                ],
+                "If several files are affected, fix one example first and confirm the sync error clears before renaming a whole folder.",
+            ),
+        }
+
+    if _contains_any(msg, ("storage full", "storage quota", "quota")) and _contains_any(msg, ("onedrive", "admin portal", "space")):
+        return {
+            "service": "onedrive",
+            "intent": "sync",
+            "reply": _build_guided_reply(
+                "A OneDrive quota mismatch can be either user storage, local disk space, or a stale sync-client reading.",
+                [
+                    "Check OneDrive on the web first; if web shows space available, the desktop sync client may be stale.",
+                    "Confirm the PC itself is not low on disk space, because local disk warnings can look like OneDrive storage errors.",
+                    "Quit and reopen OneDrive, then check Settings > Account > Storage to refresh the quota shown to the client.",
+                ],
+                "If web and desktop disagree after restart, open a ticket with screenshots of both quota views.",
+            ),
+        }
+
+    if _contains_any(msg, ("checked out", "checkout")) and _contains_any(msg, ("sharepoint", "file")):
+        return {
+            "service": "sharepoint",
+            "intent": "permissions",
+            "reply": _build_guided_reply(
+                "A SharePoint file checked out to someone else needs a library-owner action, especially if that person left.",
+                [
+                    "Open the file in the SharePoint library and check the Checked out to column or file details pane.",
+                    "If you are a library owner, use More actions > More > Check in or discard checkout after confirming no edits need saving.",
+                    "If you are not an owner, ask the site owner to take over the checkout or restore the last checked-in version.",
+                ],
+                "Avoid uploading a replacement until the checkout state is cleared, or version history can get messier.",
+            ),
+        }
+
+    if _contains_any(msg, ("recycle bin", "deleted")) and _contains_any(msg, ("sharepoint", "folder")):
+        return {
+            "service": "sharepoint",
+            "intent": "sync",
+            "reply": _build_guided_reply(
+                "SharePoint deleted folders are usually recoverable from the site recycle bin if retention has not expired.",
+                [
+                    "Open the SharePoint site, go to Recycle bin, and search using the part of the folder name you remember.",
+                    "Sort by Deleted date if the name search is not enough.",
+                    "Restore the folder from the recycle bin, then verify permissions because restored folders keep their previous sharing state.",
+                ],
+                "If it is not in the first-stage recycle bin, ask a site owner to check the second-stage recycle bin.",
+            ),
+        }
+
+    if _contains_any(msg, ("required metadata", "metadata is missing", "required column", "required columns")):
+        return {
+            "service": "sharepoint",
+            "intent": "sync",
+            "reply": _build_guided_reply(
+                "SharePoint upload can fail when the library requires metadata before the file can be checked in.",
+                [
+                    "Open the library in the browser and look for required columns marked with an asterisk.",
+                    "Upload the file through the browser, then fill in the required properties from the details pane.",
+                    "If syncing from File Explorer keeps failing, complete the metadata in SharePoint web first, then let OneDrive sync again.",
+                ],
+                "If the required field is unclear, the library owner needs to confirm which column blocks upload.",
+            ),
+        }
+
+    if (
+        _contains_any(msg, ("power query", "query credentials", "data source credentials"))
+        or (
+            _contains_any(msg, ("excel", "workbook"))
+            and _contains_any(msg, ("query", "data source"))
+            and _contains_any(msg, ("credentials", "password reset", "sign in"))
+        )
+    ):
+        return {
+            "service": "excel",
+            "intent": "sign_in",
+            "reply": _build_guided_reply(
+                "Power Query often keeps old credentials after a password reset.",
+                [
+                    "In Excel, go to Data > Get Data > Data Source Settings and clear permissions for the affected source.",
+                    "Close and reopen Excel, then refresh the query and sign in with the new password when prompted.",
+                    "If the source is SharePoint or OneDrive, also confirm Office is signed into the same work account.",
+                ],
+                "If it still loops, include the data source type and whether refresh works in Excel web.",
+            ),
+        }
+
+    if _contains_any(msg, ("same cells", "coauthor", "co-author", "another user changed")):
+        return {
+            "service": "excel",
+            "intent": "sync",
+            "reply": _build_guided_reply(
+                "Excel coauthor conflicts happen when two people edit the same area before the workbook merges changes.",
+                [
+                    "Open File > Info and check for upload or conflict messages.",
+                    "Use Version History to compare the current version with the conflicted version before discarding anything.",
+                    "Copy the cells you need into the live workbook, then let AutoSave finish before closing Excel.",
+                ],
+                "If conflicts keep happening, have everyone reopen the workbook from SharePoint or OneDrive web to reset coauthoring.",
+            ),
+        }
+
+    if _contains_any(msg, ("sensitivity label",)):
+        return {
+            "service": "word",
+            "intent": "permissions",
+            "reply": _build_guided_reply(
+                "Sensitivity labels are controlled by policy, so Word may block removal even when you own the draft.",
+                [
+                    "Check the label menu and see whether a lower label is available or greyed out.",
+                    "If removal is blocked, confirm whether your organization requires a justification or prevents downgrades.",
+                    "Try Word on the web once; if policy blocks it there too, an admin must change label permissions or policy.",
+                ],
+                "Do not copy sensitive content into an unlabeled file just to bypass the label.",
+            ),
+        }
+
+    if _contains_any(msg, ("normal template", "new document", "weird margin", "weird font")):
+        return {
+            "service": "word",
+            "intent": "formatting",
+            "reply": _build_guided_reply(
+                "When every new Word document has the wrong font or margins, the Normal template is usually carrying the bad default.",
+                [
+                    "Open a blank document and set the correct font and margins, then choose Set As Default where available.",
+                    "If the issue returns, close Word and rename the Normal.dotm template so Word creates a clean one.",
+                    "If this is a corporate template, check whether a startup template is being pushed by policy.",
+                ],
+                "If you rename Normal.dotm, keep the old copy until you confirm macros or custom styles are not needed.",
+            ),
+        }
+
+    if _contains_any(msg, ("embedded fonts", "embedded font", "fonts cannot be saved")):
+        return {
+            "service": "powerpoint",
+            "intent": "formatting",
+            "reply": _build_guided_reply(
+                "PowerPoint cannot embed some fonts because of font licensing or unsupported font types.",
+                [
+                    "Use File > Options > Save and check whether font embedding is enabled for the presentation.",
+                    "Replace any restricted font with a standard Office font if PowerPoint says the font cannot be embedded.",
+                    "Save a PDF copy for presenting if the deck must look identical on another computer.",
+                ],
+                "If this is a brand font, a ticket should include the font name and whether the font is installed on the presenting PC.",
+            ),
+        }
+
+    if _contains_any(msg, ("presenter remote", "remote advances")):
+        return {
+            "service": "powerpoint",
+            "intent": "device_setup",
+            "reply": _build_guided_reply(
+                "A presenter remote sends keys to whichever app has focus, so it can control the wrong window.",
+                [
+                    "Click once inside the PowerPoint slideshow window before using the remote.",
+                    "Close or minimize media players that may be stealing focus.",
+                    "In Slide Show settings, confirm the deck is presented by PowerPoint on the display you are actually using.",
+                ],
+                "If the remote still controls another app, test the keyboard arrow keys; if those also affect the wrong app, it is a focus/display issue.",
+            ),
+        }
+
+    if _contains_any(msg, ("morph", "transition is missing")):
+        return {
+            "service": "powerpoint",
+            "intent": "formatting",
+            "reply": _build_guided_reply(
+                "Morph availability depends on the PowerPoint version, license, and file format.",
+                [
+                    "Open File > Account and confirm Office is signed in and updated.",
+                    "Save the deck as `.pptx`; older formats can hide newer transitions.",
+                    "If Morph is missing only on one computer, run Office Update from File > Account > Update Options.",
+                ],
+                "If it still is not available after updating, compare the Office build number with a computer where Morph appears.",
+            ),
+        }
+
+    if _contains_any(msg, ("windows hello", "hello")) and _contains_any(msg, ("camera", "turn on")):
+        return {
+            "service": "windows",
+            "intent": "sign_in",
+            "reply": _build_guided_reply(
+                "Windows Hello uses the biometric/IR camera path, which can fail even when a normal Teams camera preview works.",
+                [
+                    "Go to Settings > Accounts > Sign-in options and remove then re-add Windows Hello face if the option is available.",
+                    "Check Windows Update for biometric or camera driver updates.",
+                    "In Device Manager, look for Windows Hello Face Software Device or biometric camera warnings.",
+                ],
+                "If Teams camera works but Hello still fails, include the camera model and any Device Manager warning in a ticket.",
+            ),
+        }
+
+    if _contains_any(msg, ("default printer", "changing the default printer", "keeps changing")):
+        return {
+            "service": "windows",
+            "intent": "printing",
+            "reply": _build_guided_reply(
+                "Windows may be set to automatically manage the default printer based on the last printer used.",
+                [
+                    "Go to Settings > Bluetooth & devices > Printers & scanners.",
+                    "Turn off Let Windows manage my default printer.",
+                    "Select the real printer you want and choose Set as default.",
+                ],
+                "If it keeps switching to OneNote after that, remove the OneNote virtual printer only if your workflow does not need it.",
+            ),
+        }
+
+    if _contains_any(msg, ("mapped drive", "disconnects after sleep")):
+        return {
+            "service": "windows",
+            "intent": "sync",
+            "reply": _build_guided_reply(
+                "Mapped drives that drop after sleep usually need the network session refreshed, not a full internet fix.",
+                [
+                    "Disconnect and reconnect the mapped drive after waking the laptop to confirm the path and credentials still work.",
+                    "Open Credential Manager and refresh saved Windows credentials for the file server if the reconnect prompts again.",
+                    "If this happens only on VPN, connect VPN before opening File Explorer so the drive maps after the tunnel is ready.",
+                ],
+                "If the drive still drops daily, a ticket should include the drive letter, server path, and whether VPN was connected.",
+            ),
+        }
+
+    if _contains_any(msg, ("activation fails", "activation failed", "office activation")) and _contains_any(msg, ("vpn", "proxy")):
+        return {
+            "service": "microsoft 365",
+            "intent": "activation",
+            "reply": _build_guided_reply(
+                "Office activation failing only on VPN usually means the VPN or proxy is blocking the licensing endpoint.",
+                [
+                    "Disconnect VPN and confirm Office activates on the normal network.",
+                    "Reconnect VPN and test signing in at microsoft365.com in a browser.",
+                    "If browser sign-in works but activation fails, the VPN/proxy policy may need to allow Microsoft licensing traffic.",
+                ],
+                "A ticket should include whether activation works off VPN and the exact activation message shown on VPN.",
+            ),
+        }
+
+    if _contains_any(msg, ("floating toolbar", "toolbar covers", "covers the submit button")):
+        return {
+            "service": "microsoft 365",
+            "intent": "display",
+            "reply": _build_reply([
+                "That sounds like a Microsoft app window or browser toolbar is blocking part of the form, but I need the app name to avoid guessing.",
+                "Try zooming the page to 90 percent or pressing Esc once to dismiss floating controls, then tell me whether this is in Teams, Outlook, SharePoint, Office web, or another Microsoft app.",
+                "If the toolbar appears only in the browser, test the same page in an InPrivate window so we can separate an extension from the Microsoft page itself.",
+            ]),
+        }
+
+    return None
 
 
 def _outlook_calendar_reply():
@@ -3965,12 +4729,25 @@ def handle_message(message, awaiting_ticket_detail=False,
     }
     if not explicit_service:
         related_match = _related_history_match(msg, thread_memory)
+    capability_match = {
+        "service": None,
+        "score": 0,
+        "matched_terms": [],
+    }
+    if not explicit_service and not fuzzy_service and not hardware_context["suggested_service"]:
+        capability_match = _capability_history_match(
+            msg,
+            history_context,
+            thread_memory,
+        )
 
     # Service hint priority:
-    # explicit keyword > hardware mapping > fuzzy match > confident related
-    # thread > default
+    # explicit keyword > capability from prior apps > confident related
+    # thread > hardware mapping > fuzzy match > recent focus > default
     if explicit_service:
         service = explicit_service
+    elif capability_match.get("service"):
+        service = capability_match["service"]
     elif (
         related_match.get("referential")
         and related_match.get("score", 0) >= 1
@@ -4002,6 +4779,12 @@ def handle_message(message, awaiting_ticket_detail=False,
     if known_issue:
         service = known_issue["service"]
         intent = known_issue["intent"]
+    specialized_case = _specialized_niche_reply(msg)
+    if specialized_case:
+        service = specialized_case["service"]
+        intent = specialized_case["intent"]
+    if service == "outlook" and _contains_any(msg, OUTLOOK_EMAIL_DELIVERY_TERMS):
+        intent = "email_delivery"
     if (
         service in {"outlook", "teams", "onedrive", "microsoft 365"}
         and _contains_any(msg, PASSWORD_PROMPT_LOOP_TERMS)
@@ -4030,6 +4813,8 @@ def handle_message(message, awaiting_ticket_detail=False,
         intent = "unknown"
     if service == "sharepoint" and _contains_any(msg, SHAREPOINT_READ_ONLY_TERMS):
         intent = "permissions"
+    if service == "onedrive" and _contains_any(msg, ("red x", "sync error", "sync errors", "error icon")):
+        intent = "sync"
     if service == "onedrive" and _contains_any(msg, ONEDRIVE_CONFLICT_TERMS):
         intent = "sync"
     if (
@@ -4064,6 +4849,8 @@ def handle_message(message, awaiting_ticket_detail=False,
         hardware_context=hardware_context,
         multi_context=multi_context,
     )
+    if capability_match.get("service") == service:
+        inherited_context_ambiguous = False
     inherited_recent_service = (
         service == history_context.get("last_service")
         and service != "microsoft 365"
@@ -4153,6 +4940,57 @@ def handle_message(message, awaiting_ticket_detail=False,
         )
         return payload
 
+    if (
+        specialized_case
+        and not escalation_requested
+        and not awaiting_ticket_detail
+        and not user_is_correcting
+    ):
+        response.update({
+            "resolved": True,
+            "service": specialized_case["service"],
+            "intent": specialized_case["intent"],
+            "reply": specialized_case["reply"],
+            "response_source": "rules",
+        })
+        return _finalize_response(response)
+
+    if (
+        _is_error_code_focused_message(msg)
+        and not escalation_requested
+        and not awaiting_ticket_detail
+    ):
+        error_codes = _extract_error_codes(message)
+        context_service = _context_service_for_error_code(
+            history_context,
+            related_match,
+            service,
+        )
+        has_context_service = context_service != "microsoft 365"
+        context_intent = _context_intent_for_service(
+            thread_memory,
+            context_service,
+            intent,
+        )
+        response.update({
+            "resolved": True,
+            "service": context_service,
+            "intent": context_intent,
+            "priority": _infer_priority(
+                msg,
+                context_service,
+                context_intent,
+                multi_context={"is_multi": False},
+            ),
+            "reply": _error_code_reply(
+                context_service,
+                context_intent,
+                error_codes,
+                has_context=has_context_service,
+            ),
+        })
+        return _finalize_response(response)
+
     # =============================================
     # FAST EXITS - bypass Gemini entirely
     # Only for cases where AI adds zero value
@@ -4228,7 +5066,7 @@ def handle_message(message, awaiting_ticket_detail=False,
         })
         return _finalize_response(response)
 
-    if not escalation_requested and not inherited_recent_service and _should_clarify_current_application(
+    if not escalation_requested and not inherited_recent_service and not capability_match.get("service") and _should_clarify_current_application(
         msg,
         history_context,
         related_match,
@@ -4627,30 +5465,30 @@ def handle_message(message, awaiting_ticket_detail=False,
         min_confidence=0.35,
     )
 
-    if _should_answer_from_local_knowledge(
-        keyword_context,
-        multi_context,
-        escalation_requested=escalation_requested,
-        awaiting_ticket_detail=awaiting_ticket_detail,
-        user_is_correcting=user_is_correcting,
-    ) and not prefer_gemini_for_ambiguous_surface:
-        primary_resource = (keyword_context.get("resources") or [{}])[0]
+    if (
+        keyword_context.get("found")
+        and keyword_context.get("confidence", 0.0) >= 0.55
+        and not escalation_requested
+        and not user_is_correcting
+    ):
+        primary_resource = keyword_context["resources"][0]
         resource_intent = primary_resource.get("intent")
         response.update({
             "resolved": True,
-            "reply": _build_primary_knowledge_reply(primary_resource),
+            "reply": keyword_context["reply"],
             "service": primary_resource.get("service", service),
             "intent": resource_intent if resource_intent and resource_intent != "unknown" else intent,
             "knowledge_retrieved": True,
             "knowledge_source": "local_context",
             "knowledge_confidence": keyword_context.get("confidence", 0.0),
-            "response_source": "local_knowledge",
+            "response_source": "local_fallback",
         })
         return _finalize_response(response)
 
     if (
         not prefer_gemini_for_ambiguous_surface
         and (service, intent) in SERVICE_INTENT_RESPONSES
+        and not keyword_context.get("found")
         and not escalation_requested
         and not user_is_correcting
     ):
@@ -4788,34 +5626,6 @@ def handle_message(message, awaiting_ticket_detail=False,
             "reply": _rule_based_step_reply(service, intent),
         })
         return _finalize_response(response)
-
-    # Static support-link fallback. This only runs when the bot has low local
-    # confidence after model/rule handling, so normal troubleshooting stays first.
-    if _should_use_support_link_fallback(
-        service,
-        intent,
-        detailed_enough,
-        hardware_context,
-        error,
-        message=msg,
-    ):
-        support_link_plan = retrieve_support_link_plan(
-            message,
-            service_hint=service,
-            intent_hint=intent,
-        )
-        if support_link_plan.get("found") and not escalation_requested:
-            response.update({
-                "resolved": True,
-                "reply": support_link_plan["reply"],
-                "knowledge_retrieved": True,
-                "knowledge_source": "support_link",
-                "knowledge_confidence": support_link_plan.get("confidence", 0.0),
-                "knowledge_learned": support_link_plan.get("learned", False),
-                "knowledge_source_url": support_link_plan.get("source_url", ""),
-                "response_source": "support_link",
-            })
-            return _finalize_response(response)
 
     # Service detected fallback
     if (
