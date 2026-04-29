@@ -111,6 +111,16 @@ def _build_ticket_email(
     return subject, body, html_body
 
 
+def _build_message(sender, recipient, subject, body, html_body):
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = sender
+    message["To"] = recipient
+    message.set_content(body)
+    message.add_alternative(html_body, subtype="html")
+    return message
+
+
 def send_ticket_created_email(
     ticket_id,
     user_name,
@@ -150,19 +160,24 @@ def send_ticket_created_email(
         admin_url=admin_url,
     )
 
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = sender
-    message["To"] = ", ".join(recipients)
-    message.set_content(body)
-    message.add_alternative(html_body, subtype="html")
-
     try:
         with smtplib.SMTP(host, port, timeout=20) as smtp:
             if use_tls:
                 smtp.starttls()
             smtp.login(username, password)
-            smtp.send_message(message)
-        return True, ""
+            failed_recipients = []
+            sent_count = 0
+            for recipient in recipients:
+                message = _build_message(sender, recipient, subject, body, html_body)
+                refused = smtp.send_message(message) or {}
+                if refused:
+                    failed_recipients.append(recipient)
+                else:
+                    sent_count += 1
+
+        if failed_recipients:
+            failed = ", ".join(failed_recipients)
+            return sent_count > 0, f"failed_recipients: {failed}"
+        return sent_count == len(recipients), ""
     except Exception as exc:
         return False, str(exc)
