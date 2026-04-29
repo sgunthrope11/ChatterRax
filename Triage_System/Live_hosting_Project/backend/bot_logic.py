@@ -2889,9 +2889,8 @@ def get_domain_client_config():
     welcome_template = str(
         client_config.get("welcome_template")
         or (
-            "Hi{name_part} I am ChatterRax Bot. "
-            f"I help triage {SUPPORTED_SCOPE_DESCRIPTION} "
-            "Tell me what is going wrong and I will help sort the issue before we open a ticket."
+            f"Hi{{name_part}} I am ChatterRax, a {DOMAIN_LABEL} bot here to help you out. "
+            f"I can triage {SUPPORTED_SCOPE_DESCRIPTION}"
         )
     )
     quick_action_template = str(

@@ -21,10 +21,10 @@ let profileSubmitted = false;
 
 function buildWelcomeMessage(profile = {}) {
     const providedName = String(profile.name || "").trim();
-    const introName = providedName ? ` ${providedName},` : "!";
+    const introName = providedName ? ` ${providedName},` : " there,";
     const template = String(
         DOMAIN_CONFIG.welcome_template ||
-        "Hi{name_part} I am ChatterRax Bot. Tell me what is going wrong and I will help sort the issue before we open a ticket."
+        "Hi{name_part} I am ChatterRax, a support bot here to help you out."
     );
     return template.replace("{name_part}", introName);
 }

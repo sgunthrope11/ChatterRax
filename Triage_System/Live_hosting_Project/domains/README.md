@@ -172,7 +172,7 @@ Minimal replacement pack:
   "client": {
     "chat_subtitle": "CRM support triage.",
     "input_placeholder": "Describe your CRM issue...",
-    "welcome_template": "Hi{name_part} I help triage CRM issues. Tell me what is going wrong.",
+    "welcome_template": "Hi{name_part} I am ChatterRax, a CRM bot here to help you out.",
     "quick_action_template": "Work on {label}."
   },
   "services": {
