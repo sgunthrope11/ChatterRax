@@ -78,7 +78,7 @@ def extract_history_context(
     conversation_history,
     normalize_message,
     detect_all_services,
-    default_service="microsoft 365",
+    default_service=None,
 ):
     history = conversation_history or []
     services_mentioned = []
@@ -137,7 +137,7 @@ def build_thread_memory(
     get_hardware_context,
     fuzzy_detect_service,
     detect_intent,
-    default_service="microsoft 365",
+    default_service=None,
 ):
     threads_by_service = {}
     last_service = None
@@ -280,7 +280,7 @@ def related_history_match(message, thread_memory, contains_any):
     }
 
 
-def clarify_current_application_reply(thread_memory, service_label, default_service="microsoft 365"):
+def clarify_current_application_reply(thread_memory, service_label, default_service=None):
     recent_services = [
         thread.get("service")
         for thread in (thread_memory.get("threads") or [])[:2]

@@ -100,7 +100,7 @@ def load_domain_pack(domain_name=None):
     pack["_path"] = str(path)
     pack["_load_error"] = ""
 
-    for key in ("services", "intents", "service_intent_responses", "gemini"):
+    for key in ("services", "intents", "service_intent_responses", "gemini", "client"):
         if not isinstance(pack.get(key), dict):
             pack[key] = {}
     if not isinstance(pack.get("knowledge_resources"), list):
@@ -131,6 +131,7 @@ def _merge_domain_packs(packs):
     intents = _merge_dict_values(*(pack.get("intents") for pack in packs))
     responses = _merge_dict_values(*(pack.get("service_intent_responses") for pack in packs))
     gemini = {"extra_rules": []}
+    client = {}
     knowledge_resources = []
     labels = []
     scopes = []
@@ -155,6 +156,7 @@ def _merge_domain_packs(packs):
         if load_error:
             load_errors.append(f"{pack.get('name')}: {load_error}")
         knowledge_resources.extend(pack.get("knowledge_resources") or [])
+        client.update(pack.get("client") or {})
         extra_rules = (pack.get("gemini") or {}).get("extra_rules") or []
         gemini["extra_rules"].extend(as_tuple(extra_rules))
 
@@ -170,6 +172,7 @@ def _merge_domain_packs(packs):
         "service_intent_responses": responses,
         "knowledge_resources": knowledge_resources,
         "gemini": gemini,
+        "client": client,
         "replace_builtin_services": not includes_default or all(
             bool(pack.get("replace_builtin_services")) for pack in packs
         ),

@@ -310,7 +310,7 @@ def _safe_load_learned_resources():
             continue
         cleaned.append({
             "id": str(resource.get("id")),
-            "service": str(resource.get("service") or "microsoft 365"),
+            "service": str(resource.get("service") or DOMAIN_DEFAULT_SERVICE),
             "intent": str(resource.get("intent") or "unknown"),
             "title": str(resource.get("title") or "Microsoft support article"),
             "source": str(resource.get("source") or "Learned Microsoft support memory"),
@@ -369,7 +369,7 @@ def add_learned_resource(resource):
 
     learned.append({
         "id": str(resource["id"]),
-        "service": str(resource.get("service") or "microsoft 365"),
+        "service": str(resource.get("service") or DOMAIN_DEFAULT_SERVICE),
         "intent": str(resource.get("intent") or "unknown"),
         "title": str(resource.get("title") or "Microsoft support article"),
         "source": str(resource.get("source") or "Official Microsoft support"),

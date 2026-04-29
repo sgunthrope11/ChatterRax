@@ -120,11 +120,13 @@ def canonical_service(service_name, service_keywords, fallback=None):
     normalized = str(service_name or "").strip().lower()
     if normalized in service_keywords:
         return normalized
-    return fallback or "microsoft 365"
+    return fallback
 
 
-def service_label(service, service_labels):
-    return service_labels.get(service or "microsoft 365", "Microsoft 365")
+def service_label(service, service_labels, default_service=None, default_label=None):
+    fallback_service = default_service or next(iter(service_labels), "")
+    fallback_label = default_label or service_labels.get(fallback_service, fallback_service.title())
+    return service_labels.get(service or fallback_service, fallback_label)
 
 
 def detect_unsupported_service(message, unsupported_status_keywords, unsupported_service_keywords):
@@ -262,8 +264,9 @@ def looks_like_vague_service_message(
     hardware_context=None,
     known_issue=None,
     multi_context=None,
+    default_service=None,
 ):
-    if not service or service == "microsoft 365":
+    if not service or (default_service and service == default_service):
         return False
     if hardware_context and hardware_context.get("has_hardware_term"):
         return False
@@ -502,6 +505,7 @@ def get_multi_issue_context(
     fuzzy_detect_service_fn,
     hardware_service_map,
     multi_issue_strong_markers,
+    default_service=None,
 ):
     hardware_terms = hardware_context.get("hardware_terms") or []
     services = infer_loose_services(message, detected_services)
@@ -516,7 +520,10 @@ def get_multi_issue_context(
         fuzzy_service = None
     append_unique(services, fuzzy_service)
 
-    base_service_count = len([service for service in services if service != "microsoft 365"])
+    base_service_count = len([
+        service for service in services
+        if not default_service or service != default_service
+    ])
     topic_count = base_service_count + len(hardware_terms)
     is_multi = (
         base_service_count >= 2

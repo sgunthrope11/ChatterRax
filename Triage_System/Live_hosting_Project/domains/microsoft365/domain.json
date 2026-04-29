@@ -3,12 +3,230 @@
   "domain_label": "Microsoft 365",
   "default_service": "microsoft 365",
   "supported_scope": "Microsoft workplace support issues for Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account.",
-  "description": "Default ChatterRax live-demo domain. The built-in Microsoft 365 rules and replies remain active; this file is the stable plug-in point for future overlays.",
-  "services": {},
-  "intents": {},
-  "service_intent_responses": {},
-  "knowledge_resources": [],
+  "description": "Default ChatterRax live-demo domain. This pack shows the same JSON-driven structure a replacement domain would use while keeping the built-in Microsoft 365 rules and knowledge active.",
+  "replace_builtin_services": false,
+  "replace_builtin_intents": false,
+  "replace_builtin_knowledge": false,
+  "replace_builtin_responses": false,
+  "client": {
+    "chat_subtitle": "Microsoft workplace support triage and ticket intake.",
+    "input_placeholder": "Describe your Microsoft 365 issue...",
+    "welcome_template": "Hi{name_part} I am ChatterRax Bot. I help triage Microsoft workplace issues across Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account access. Tell me what is going wrong and I will help sort the issue before we open a ticket.",
+    "quick_action_template": "Let's handle {label} next."
+  },
+  "services": {
+    "teams": {
+      "label": "Teams",
+      "keywords": ["teams", "microsoft teams", "ms teams", "meeting", "chat", "channel", "call"],
+      "follow_up": "Tell me whether Teams failed during sign-in, joining a meeting, chat/messages, or audio/video devices.",
+      "reply_opener": "For Teams, the next step depends on whether this is the meeting, messaging, sign-in, or device path.",
+      "capability_terms": ["meeting", "chat", "channel", "call", "audio", "camera", "screen share"]
+    },
+    "outlook": {
+      "label": "Outlook",
+      "keywords": ["outlook", "email", "mail", "inbox", "calendar", "meeting invite", "outbox"],
+      "follow_up": "Tell me whether Outlook failed while sending, receiving, opening mail, searching, using calendar, or signing in.",
+      "reply_opener": "For Outlook, the useful split is webmail versus desktop Outlook, then the specific mail action that failed.",
+      "capability_terms": ["email", "mail", "inbox", "calendar", "search", "outbox", "attachment"]
+    },
+    "onedrive": {
+      "label": "OneDrive",
+      "keywords": ["onedrive", "one drive", "sync", "cloud files", "red x", "pending sync"],
+      "follow_up": "Tell me whether OneDrive shows a red X, pending sync, missing files, upload failure, or a file that will not open.",
+      "reply_opener": "For OneDrive, start with the sync client state and the exact file status before changing the file.",
+      "capability_terms": ["file", "files", "sync", "upload", "download", "cloud", "folder"]
+    },
+    "sharepoint": {
+      "label": "SharePoint",
+      "keywords": ["sharepoint", "site", "library", "sharing link", "access denied"],
+      "follow_up": "Tell me whether SharePoint blocked the site, the file, editing, sync, or the sharing link.",
+      "reply_opener": "For SharePoint, check the browser view and account permissions before assuming the file itself is damaged.",
+      "capability_terms": ["site", "library", "link", "permission", "access", "metadata", "version history"]
+    },
+    "excel": {
+      "label": "Excel",
+      "keywords": ["excel", "spreadsheet", "workbook", "formula", "pivot", "xlsx"],
+      "follow_up": "Tell me whether Excel failed while opening, saving, calculating formulas, refreshing data, or formatting.",
+      "reply_opener": "For Excel, the useful split is whether the issue follows one workbook or every workbook.",
+      "capability_terms": ["formula", "spreadsheet", "workbook", "pivot", "cells", "data refresh"]
+    },
+    "word": {
+      "label": "Word",
+      "keywords": ["word", "document", "docx", "track changes", "formatting"],
+      "follow_up": "Tell me whether Word failed while opening, saving, editing, formatting, printing, or signing in.",
+      "reply_opener": "For Word, first check whether the issue follows one document or the Word app itself.",
+      "capability_terms": ["document", "formatting", "track changes", "template", "comments"]
+    },
+    "powerpoint": {
+      "label": "PowerPoint",
+      "keywords": ["powerpoint", "presentation", "slide", "deck", "pptx"],
+      "follow_up": "Tell me whether PowerPoint failed while opening, presenting, playing media, formatting, or saving.",
+      "reply_opener": "For PowerPoint, first separate one-deck problems from app-wide problems.",
+      "capability_terms": ["slide", "deck", "presentation", "video", "audio", "presenter"]
+    },
+    "windows": {
+      "label": "Windows",
+      "keywords": ["windows", "pc", "computer", "laptop", "update", "printer", "bluetooth", "display", "sound"],
+      "follow_up": "Tell me whether Windows is blocking sign-in, display, sound, Bluetooth, printer, update, or another device setting.",
+      "reply_opener": "For Windows, start with the local setting, device state, or update screen tied to the symptom.",
+      "capability_terms": ["update", "printer", "display", "monitor", "bluetooth", "wifi", "sound", "login"]
+    },
+    "microsoft account": {
+      "label": "Microsoft account",
+      "keywords": ["microsoft account", "ms account", "sign in", "login", "authenticator", "verification code", "password reset"],
+      "follow_up": "Tell me whether the Microsoft account blocker is password, verification code, Authenticator, recovery, or a sign-in loop.",
+      "reply_opener": "For Microsoft account issues, keep secrets out of chat and test the official sign-in page first.",
+      "capability_terms": ["password", "authenticator", "verification code", "mfa", "recovery", "locked out"]
+    },
+    "microsoft 365": {
+      "label": "Microsoft 365",
+      "keywords": ["microsoft 365", "office 365", "office", "m365", "o365"],
+      "follow_up": "Name the app if you can. If not, tell me what you clicked, what appeared, and any exact code or wording.",
+      "reply_opener": "Let us narrow this from the symptom instead of guessing the app.",
+      "capability_terms": ["office", "license", "activation", "account", "subscription"]
+    }
+  },
+  "intents": {
+    "sign_in": {
+      "keywords": ["sign in", "signin", "login", "password", "credentials", "authenticator", "verification code"],
+      "wrap_up": "If sign-in still fails, keep the exact wording and do not share passwords or verification codes."
+    },
+    "sync": {
+      "keywords": ["sync", "syncing", "pending", "not updating", "missing", "stuck", "red x"],
+      "wrap_up": "If sync still fails, compare the web version with the desktop app before opening a ticket."
+    },
+    "email_delivery": {
+      "keywords": ["email", "send", "sending", "outbox", "bounce", "undeliverable", "mail delivery"],
+      "wrap_up": "If mail still will not send, keep the full bounce-back or send/receive error."
+    },
+    "permissions": {
+      "keywords": ["permission", "access denied", "blocked", "read only", "sharing link"],
+      "wrap_up": "If access is still blocked, capture the link type and the account shown in the browser."
+    },
+    "crash": {
+      "keywords": ["crash", "crashing", "freeze", "freezing", "not responding", "will not open"],
+      "wrap_up": "If it fails again, note whether it happens at launch, one file, or one action."
+    },
+    "update": {
+      "keywords": ["windows update", "update failed", "update stuck", "update error", "update loop", "checking for updates"],
+      "wrap_up": "If the same update keeps failing, note the error code and failed update name."
+    },
+    "audio": {
+      "keywords": ["audio", "sound", "speaker", "microphone", "mic", "can't hear", "cannot hear"],
+      "wrap_up": "If audio still fails, note the selected input and output devices."
+    },
+    "video": {
+      "keywords": ["camera", "webcam", "video", "black screen", "no video"],
+      "wrap_up": "If video still fails, test whether the camera works in another app."
+    },
+    "printing": {
+      "keywords": ["printer", "print", "scanner", "scan", "print queue"],
+      "wrap_up": "If printing still fails, keep the printer name and queue status."
+    }
+  },
+  "service_intent_responses": {
+    "teams|sync": [
+      "Teams messages getting stuck usually means the desktop app, network, or session cache needs a reset.",
+      "Check your internet connection, fully quit Teams, and reopen it.",
+      "If messages still will not send, try Teams on the web to see whether the issue is only in the desktop app."
+    ],
+    "outlook|email_delivery": [
+      "Outlook send failures usually need the outbox, connection state, and webmail checked first.",
+      "Check whether Outlook is in Work Offline mode, then try sending the message from Outlook on the web.",
+      "If the message bounces, keep the full bounce-back text because the recipient or domain detail matters."
+    ],
+    "onedrive|sync": [
+      "OneDrive being stuck usually means sync needs a clean restart or the account needs to be confirmed.",
+      "Confirm you are signed in to the correct work account, then pause and resume sync from the OneDrive cloud icon.",
+      "If the file still says pending, reopen OneDrive and check for sync errors."
+    ],
+    "sharepoint|permissions": [
+      "SharePoint access errors usually mean the link and the signed-in account do not line up.",
+      "Open the file or site link in a browser and confirm you are signed in with the correct work account.",
+      "If it still says access denied, ask the file owner to share it again or verify your permissions from SharePoint."
+    ],
+    "windows|update": [
+      "Windows Update getting stuck or failing usually means a specific update has an install error or the update service needs a reset.",
+      "Go to Settings > Windows Update and click Check for updates, then note the error code shown next to any failed update.",
+      "If it is stuck on the same update, run the Windows Update Troubleshooter from Settings > System > Troubleshoot > Other troubleshooters."
+    ],
+    "microsoft account|sign_in": [
+      "Microsoft account prompts can loop when the sign-in session or verification method is out of step.",
+      "Try signing in at microsoft365.com and confirm whether the verification code or Authenticator prompt appears.",
+      "Do not share passwords, verification codes, recovery codes, or Authenticator codes in chat."
+    ]
+  },
+  "knowledge_resources": [
+    {
+      "id": "m365_pack_teams_chat_send",
+      "service": "teams",
+      "intent": "sync",
+      "title": "Teams chat messages are not sending",
+      "source": "Microsoft 365 domain pack",
+      "keywords": ["teams", "chat", "messages not sending", "message stuck", "send message"],
+      "steps": [
+        "Fully quit Teams and reopen it.",
+        "Try sending the same message in Teams on the web.",
+        "If web works but desktop fails, clear the Teams app cache or reinstall Teams."
+      ]
+    },
+    {
+      "id": "m365_pack_outlook_outbox",
+      "service": "outlook",
+      "intent": "email_delivery",
+      "title": "Outlook email stuck in the outbox",
+      "source": "Microsoft 365 domain pack",
+      "keywords": ["outlook", "outbox", "email stuck", "will not send", "send receive"],
+      "steps": [
+        "Make sure Outlook is not in Work Offline mode.",
+        "Try sending the same message from Outlook on the web.",
+        "If the message bounces, keep the full bounce-back text."
+      ]
+    },
+    {
+      "id": "m365_pack_onedrive_sync",
+      "service": "onedrive",
+      "intent": "sync",
+      "title": "OneDrive sync stuck or pending",
+      "source": "Microsoft 365 domain pack",
+      "keywords": ["onedrive", "sync stuck", "pending sync", "red x", "not uploading"],
+      "steps": [
+        "Open the OneDrive cloud icon and check the sync activity panel.",
+        "Pause and resume sync once.",
+        "Confirm the file opens correctly in OneDrive on the web."
+      ]
+    },
+    {
+      "id": "m365_pack_sharepoint_access",
+      "service": "sharepoint",
+      "intent": "permissions",
+      "title": "SharePoint file or site says access denied",
+      "source": "Microsoft 365 domain pack",
+      "keywords": ["sharepoint", "access denied", "sharing link", "permission", "site blocked"],
+      "steps": [
+        "Open the link in a private browser window.",
+        "Confirm the signed-in account is the expected work account.",
+        "Ask the file owner to verify the sharing link and your permission."
+      ]
+    },
+    {
+      "id": "m365_pack_windows_update",
+      "service": "windows",
+      "intent": "update",
+      "title": "Windows update stuck or showing an error code",
+      "source": "Microsoft 365 domain pack",
+      "keywords": ["windows update", "update stuck", "update error", "error code", "checking for updates"],
+      "steps": [
+        "Restart once and return to Settings > Windows Update.",
+        "Run the Windows Update Troubleshooter.",
+        "Record the failed update name and exact error code."
+      ]
+    }
+  ],
   "gemini": {
-    "extra_rules": []
+    "extra_rules": [
+      "This domain is Microsoft 365 support. Keep routing inside Teams, Outlook, OneDrive, SharePoint, Excel, Word, PowerPoint, Windows, Microsoft account, or Microsoft 365.",
+      "Do not ask users to share passwords, verification codes, recovery codes, or Authenticator codes."
+    ]
   }
 }

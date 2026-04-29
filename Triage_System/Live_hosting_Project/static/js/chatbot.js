@@ -43,7 +43,8 @@ function renderWelcomeMessage(profile = {}) {
 
 function buildQuickActionPrompt(label) {
     const trimmed = String(label || "").trim();
-    return trimmed ? `Let's handle ${trimmed} next.` : "";
+    const template = String(DOMAIN_CONFIG.quick_action_template || "{label}");
+    return trimmed ? template.replace("{label}", trimmed) : "";
 }
 
 

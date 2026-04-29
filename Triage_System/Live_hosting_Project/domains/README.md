@@ -126,6 +126,7 @@ A domain pack can define:
 - `domain_label`: display label for the active domain.
 - `default_service`: fallback service when no specific service is detected.
 - `supported_scope`: text used when the bot explains what it supports.
+- `client`: browser-facing text such as subtitle, input placeholder, welcome message, and quick-action prompt template.
 - `services`: service labels, keyword lists, follow-up prompts, reply openers, and capability terms.
 - `intents`: intent keyword lists and short deterministic troubleshooting steps.
 - `service_intent_responses`: exact service+intent replies keyed as `"service|intent"`.
@@ -178,17 +179,12 @@ Live_hosting_Project/providers/gemini_provider.py
 This is enough for the current M365 demo if Railway supplies `DATABASE_URL`:
 
 ```text
-# Database
+# Local development only. In Railway/production, set these in the hosting dashboard.
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
 
-# Gemini model fallback
 GEMINI_ENABLED=True
 GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
-GEMINI_MODEL=gemini-2.5-flash-lite
-GEMINI_MAX_TOKENS=1024
-GEMINI_THINKING_BUDGET=0
 
-# Domain pack
 # Leave unset to use microsoft365 automatically.
 # BOT_DOMAIN=microsoft365
 ```

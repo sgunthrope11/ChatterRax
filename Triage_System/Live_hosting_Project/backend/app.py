@@ -15,7 +15,7 @@ if str(_ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(_ROOT_DIR))
 load_dotenv(_ROOT_DIR / ".env")
 
-from backend.bot_logic import get_domain_client_config, handle_message
+from backend.bot_logic import DEFAULT_SERVICE, get_domain_client_config, handle_message
 from backend.db.db_service import (
     create_chat_session,
     create_ticket_for_session,
@@ -120,17 +120,22 @@ def _looks_like_pure_ticket_request(message_text):
     return normalized in PURE_TICKET_REQUESTS
 
 
+def _is_default_service_name(service):
+    normalized = str(service or "").strip().lower()
+    return bool(normalized) and normalized == DEFAULT_SERVICE
+
+
 def _derive_ticket_issue_snapshot(summary_text, fallback_service=""):
     raw_summary = str(summary_text or "").strip()
     if not raw_summary:
         fallback = str(fallback_service or "").strip()
-        return f"{fallback} issue" if fallback and fallback != "microsoft 365" else ""
+        return f"{fallback} issue" if fallback and not _is_default_service_name(fallback) else ""
 
     try:
         parsed = json.loads(raw_summary)
     except json.JSONDecodeError:
         fallback = str(fallback_service or "").strip()
-        return f"{fallback} issue" if fallback and fallback != "microsoft 365" else ""
+        return f"{fallback} issue" if fallback and not _is_default_service_name(fallback) else ""
 
     current_focus = str(parsed.get("current_focus") or fallback_service or "").strip()
     threads = parsed.get("threads") or []
@@ -140,8 +145,12 @@ def _derive_ticket_issue_snapshot(summary_text, fallback_service=""):
             if snippet:
                 return snippet
 
-    fallback = current_focus if current_focus and current_focus != "microsoft 365" else str(fallback_service or "").strip()
-    return f"{fallback} issue" if fallback and fallback != "microsoft 365" else ""
+    fallback = (
+        current_focus
+        if current_focus and not _is_default_service_name(current_focus)
+        else str(fallback_service or "").strip()
+    )
+    return f"{fallback} issue" if fallback and not _is_default_service_name(fallback) else ""
 
 
 def _append_conversation_turn(conversation_key, sender, message_text):

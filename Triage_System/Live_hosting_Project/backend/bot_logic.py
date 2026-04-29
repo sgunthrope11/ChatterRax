@@ -2850,23 +2850,41 @@ _apply_domain_pack()
 
 
 def get_domain_client_config():
+    client_config = DOMAIN_PACK.get("client") or {}
     visible_services = [
         SERVICE_LABELS.get(service, service.title())
         for service in SERVICE_KEYWORDS
         if service and service != DEFAULT_SERVICE
     ]
+    chat_subtitle = str(
+        client_config.get("chat_subtitle")
+        or f"{DOMAIN_LABEL} support triage and ticket intake."
+    )
+    input_placeholder = str(
+        client_config.get("input_placeholder")
+        or f"Describe your {DOMAIN_LABEL} issue..."
+    )
+    welcome_template = str(
+        client_config.get("welcome_template")
+        or (
+            "Hi{name_part} I am ChatterRax Bot. "
+            f"I help triage {SUPPORTED_SCOPE_DESCRIPTION} "
+            "Tell me what is going wrong and I will help sort the issue before we open a ticket."
+        )
+    )
+    quick_action_template = str(
+        client_config.get("quick_action_template")
+        or "Let's handle {label} next."
+    )
     return {
         "domain_label": DOMAIN_LABEL,
         "default_service": DEFAULT_SERVICE,
         "supported_scope": SUPPORTED_SCOPE_DESCRIPTION,
         "service_labels": visible_services,
-        "chat_subtitle": f"{DOMAIN_LABEL} support triage and ticket intake.",
-        "input_placeholder": f"Describe your {DOMAIN_LABEL} issue...",
-        "welcome_template": (
-            "Hi{name_part} I am ChatterRax Bot. "
-            f"I help triage {SUPPORTED_SCOPE_DESCRIPTION} "
-            "Tell me what is going wrong and I will help sort the issue before we open a ticket."
-        ),
+        "chat_subtitle": chat_subtitle,
+        "input_placeholder": input_placeholder,
+        "welcome_template": welcome_template,
+        "quick_action_template": quick_action_template,
     }
 
 
@@ -2907,7 +2925,12 @@ def _canonical_service(service_name, fallback=None):
 
 
 def _service_label(service):
-    return _service_label_core(service, SERVICE_LABELS)
+    return _service_label_core(
+        service,
+        SERVICE_LABELS,
+        default_service=DEFAULT_SERVICE,
+        default_label=DOMAIN_LABEL,
+    )
 
 
 def _detect_unsupported_service(message):
@@ -3579,6 +3602,7 @@ def _looks_like_vague_service_message(message, service, intent,
         hardware_context=hardware_context,
         known_issue=known_issue,
         multi_context=multi_context,
+        default_service=DEFAULT_SERVICE,
     )
 
 
@@ -3676,6 +3700,7 @@ def _get_multi_issue_context(message, detected_services, hardware_context):
         _fuzzy_detect_service,
         _active_hardware_service_map(),
         MULTI_ISSUE_STRONG_MARKERS,
+        default_service=DEFAULT_SERVICE,
     )
 
 
