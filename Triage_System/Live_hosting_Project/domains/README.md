@@ -5,10 +5,7 @@ ChatterRax currently ships with two domain packs:
 - `domains/microsoft365/domain.json`
 - `domains/test/domain.json`
 
-The Microsoft 365 pack keeps the live demo focused on Microsoft 365. If no
-domain environment variable is set, ChatterRax automatically loads
-`microsoft365`. The test pack is included so you can demo replacement and
-multi-domain behavior without editing the M365 pack.
+The Microsoft 365 pack keeps the live demo focused on Microsoft 365. If no domain environment variable is set, ChatterRax automatically loads `microsoft365`. The test pack is included so you can demo replacement and multi-domain behavior without editing the M365 pack.
 
 ## Environment Setup
 
@@ -46,14 +43,9 @@ $env:BOT_DOMAINS = "microsoft365,test"
 python app.py
 ```
 
-On Railway, set these in the Variables tab instead of using PowerShell:
+In hosted production, set the same values through your hosting provider's environment/secret settings instead of PowerShell.
 
-```text
-BOT_DOMAIN=microsoft365
-```
-
-For the current demo, you can leave `BOT_DOMAIN`, `BOT_DOMAINS`, and
-`BOT_DOMAIN_PATH` unset.
+For the current demo, you can leave `BOT_DOMAIN`, `BOT_DOMAINS`, and `BOT_DOMAIN_PATH` unset.
 
 ## Load Flow
 
@@ -86,53 +78,34 @@ Then the loaded pack is used in three places:
 - `SERVICE_INTENT_RESPONSES`: exact replies for a service plus intent pair.
 - `routing`: optional routing hints such as loose service terms, service conflict rules, and fuzzy-match exclusions.
 
-The Microsoft 365 pack intentionally does not replace the built-in replies. It
-acts as the default domain identity while the current Microsoft demo behavior
-stays active.
+The Microsoft 365 pack intentionally does not replace the built-in replies. It acts as the default domain identity while the current Microsoft demo behavior stays active.
 
-For a single non-built-in replacement domain, the app now defaults the
-`replace_builtin_*` flags to `true` if you leave them unset. That keeps a new
-domain clean by default. Use `BOT_DOMAINS=microsoft365,another_domain` only when
-you intentionally want an overlay demo that combines packs.
+For a single non-built-in replacement domain, the app defaults the `replace_builtin_*` flags to `true` if you leave them unset. That keeps a new domain clean by default. Use `BOT_DOMAINS=microsoft365,another_domain` only when you intentionally want an overlay demo that combines packs.
 
 ## Where Knowledge Lives
 
 There are two knowledge sources:
 
-1. Built-in Python knowledge resources in `providers/knowledge_provider.py` and
-   the expanded resource files under `providers/`.
-2. Optional JSON knowledge resources inside a domain pack under
-   `knowledge_resources`.
+1. Built-in Python knowledge resources in `providers/knowledge_provider.py` and the expanded resource files under `providers/`.
+2. Optional JSON knowledge resources inside a domain pack under `knowledge_resources`.
 
-For the current Microsoft 365 demo, the built-in Microsoft playbook remains
-available only because the Microsoft pack declares `built_in_profile:
-"microsoft365"`. Replacement domains do not receive that built-in Microsoft
-knowledge unless they are deliberately loaded alongside the Microsoft pack.
+For the current Microsoft 365 demo, the built-in Microsoft playbook remains available only because the Microsoft pack declares `built_in_profile: "microsoft365"`. Replacement domains do not receive that built-in Microsoft knowledge unless they are deliberately loaded alongside the Microsoft pack.
 
-If a future pack defines `knowledge_resources`, `providers/knowledge_provider.py`
-normalizes those entries and adds them to retrieval. Runtime learned knowledge is
-off unless the pack sets `include_learned_knowledge: true`.
+If a future pack defines `knowledge_resources`, `providers/knowledge_provider.py` normalizes those entries and adds them to retrieval. Runtime learned knowledge is off unless the pack sets `include_learned_knowledge: true`.
 
 ## Is The JSON Needed After Startup?
 
 Yes, the JSON file must exist when the app process starts.
 
-The app reads the domain pack at Python import/startup time. After that, the
-loaded data is stored in module-level variables inside `bot_logic`,
-`knowledge_provider`, and `gemini_provider`.
+The app reads the domain pack at Python import/startup time. After that, the loaded data is stored in module-level variables inside `bot_logic`, `knowledge_provider`, and `gemini_provider`.
 
 That means:
 
-- If the JSON file is deleted after startup, the already-running process keeps
-  using the copy it loaded into memory.
+- If the JSON file is deleted after startup, the already-running process keeps using the copy it loaded into memory.
 - If the app restarts and the JSON file is missing, the pack cannot load.
-- If the JSON file is changed while the app is already running, the current
-  process does not automatically reload it.
+- If the JSON file is changed while the app is already running, the current process does not automatically reload it.
 
-To apply JSON changes, restart or redeploy the app.
-
-On Railway, pushing a change or redeploying restarts the process, so updated
-domain JSON is loaded on the next boot.
+To apply JSON changes, restart or redeploy the app. Most hosting providers restart the app when you push new code or trigger a redeploy.
 
 ## Domain Pack Fields
 
@@ -159,9 +132,7 @@ Replacement flags:
 - `replace_builtin_knowledge`
 - `replace_builtin_responses`
 
-For a single replacement domain, omitted replacement flags default to `true`.
-For the current Microsoft 365 demo, they are explicitly false so the live demo
-keeps the Microsoft built-in behavior.
+For a single replacement domain, omitted replacement flags default to `true`. For the current Microsoft 365 demo, they are explicitly false so the live demo keeps the Microsoft built-in behavior.
 
 ## Replacement Domain Example
 
@@ -233,8 +204,7 @@ Then set:
 BOT_DOMAIN=crm
 ```
 
-Because this is not a built-in profile, the Microsoft demo data is replaced by
-default.
+Because this is not a built-in profile, the Microsoft demo data is replaced by default.
 
 ## `.env` Examples
 
@@ -244,10 +214,10 @@ The local `.env` file belongs at the project root:
 Live_hosting_Project/.env
 ```
 
-In this project, that means:
+For example:
 
 ```text
-C:\Users\teric\Downloads\Ticketing System\Triage_System\Live_hosting_Project\.env
+C:\path\to\Live_hosting_Project\.env
 ```
 
 `backend/app.py` loads this file before importing the bot and providers:
@@ -262,17 +232,14 @@ Live_hosting_Project/backend/app.py
 Live_hosting_Project/providers/gemini_provider.py
 ```
 
-`triage_core/domain_config.py` does not load `.env` by itself. It reads from
-`os.environ`, so the variables must already be loaded before `bot_logic`,
-`knowledge_provider`, or `gemini_provider` import it. In normal app startup,
-`backend/app.py` handles that.
+`triage_core/domain_config.py` does not load `.env` by itself. It reads from `os.environ`, so the variables must already be loaded before `bot_logic`, `knowledge_provider`, or `gemini_provider` import it. In normal app startup, `backend/app.py` handles that.
 
 ### Current Microsoft 365 Demo `.env`
 
-This is enough for the current M365 demo if Railway supplies `DATABASE_URL`:
+This is enough for the current M365 demo if your environment supplies `DATABASE_URL`:
 
 ```text
-# Local development only. In Railway/production, set these in the hosting dashboard.
+# Local development only. In production, set these in the hosting dashboard.
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
 
 GEMINI_ENABLED=True
@@ -311,16 +278,15 @@ Direct JSON path:
 BOT_DOMAIN_PATH=C:\path\to\domain.json
 ```
 
-Multiple packs, if more are added later:
+Multiple packs:
 
 ```text
-BOT_DOMAINS=microsoft365,another_domain
+BOT_DOMAINS=microsoft365,test
 ```
 
 ### Gemini `.env`
 
-`providers/gemini_provider.py` expects these values from the root `.env` or the
-hosting environment:
+`providers/gemini_provider.py` expects these values from the root `.env` or the hosting environment:
 
 ```text
 GEMINI_ENABLED=True
@@ -355,13 +321,11 @@ FLASK_DEBUG=False
 CHAT_STATE_TTL_SECONDS=21600
 ```
 
-`CHAT_STATE_TTL_SECONDS` controls how long in-memory chat state is kept before
-old browser/session state is pruned. The default is 21600 seconds, or 6 hours.
+`CHAT_STATE_TTL_SECONDS` controls how long in-memory chat state is kept before old browser/session state is pruned. The default is 21600 seconds, or 6 hours.
 
-### Railway Variables
+### Hosted Production Variables
 
-On Railway, do not upload `.env`. Add the same values in the Railway Variables
-tab. A typical M365 demo setup looks like:
+Do not upload real `.env` files. Add the same values through your hosting provider's environment/secret settings. A typical M365 demo setup looks like:
 
 ```text
 DATABASE_URL=postgresql://...
@@ -371,9 +335,6 @@ BOT_DOMAIN=microsoft365
 FLASK_DEBUG=False
 ```
 
-Use `.env.example` as the clean import template for Railway suggested
-variables. It only lists variables this app currently reads.
+Use `.env.example` or `.env.production.example` as clean import templates. They only list variables this app currently reads.
 
-Remove any older Railway variables such as support-link or recommended-article
-URLs if they are still present in the Railway dashboard. The app no longer reads
-or needs those values.
+Remove any older support-link or recommended-article URL variables from your hosting provider if they are still present. The app no longer reads or needs those values.

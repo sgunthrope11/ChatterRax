@@ -62,7 +62,7 @@ def _build_ticket_email(
         f"Description: {str(description or '').strip()}",
         "",
         "Admin Link",
-        admin_url or "Not configured. Set TICKET_ADMIN_URL to your Railway admin page link.",
+        admin_url or "Not configured. Set TICKET_ADMIN_URL to your deployed admin page link.",
         "",
         "Routing",
         f"Service: {service or 'unknown'}",

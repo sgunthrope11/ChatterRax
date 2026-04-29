@@ -14,7 +14,7 @@ The app collects a user's name, email, and department, runs the message through 
 - Ticket email provider: `providers/email_provider.py`
 - PostgreSQL schema: `schema.sql`
 - Domain packs: `domains/microsoft365/domain.json` and `domains/test/domain.json`
-- Railway config: `railway.toml`, `Procfile`, `requirements.txt`
+- Deployment files: `Procfile`, `requirements.txt`, and `.env.production.example`
 
 ## Request Flow
 
@@ -56,7 +56,7 @@ Tracked examples:
 
 - `.env.example` - general local/production placeholders
 - `.env.domain.example` - safe domain-only placeholders
-- `.env.railway.example` - Railway variable reference
+- `.env.production.example` - hosted deployment placeholders
 
 Ignored local files:
 
@@ -66,7 +66,7 @@ Ignored local files:
 
 ## Local Environment Setup
 
-Create `.env` for secrets:
+Create `.env` at the project root for secrets:
 
 ```env
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
@@ -90,7 +90,7 @@ SMTP_PASSWORD=your_gmail_app_password
 SMTP_FROM=your_sending_gmail@gmail.com
 ```
 
-Create `.env.domain` for safe domain switching:
+Create `.env.domain` at the project root for safe domain switching:
 
 ```env
 BOT_DOMAIN=microsoft365
@@ -121,20 +121,25 @@ Open:
 http://127.0.0.1:5000/chatbot
 ```
 
-For local Railway Postgres testing, use Railway's public/external Postgres URL, not the internal `postgres.railway.internal` URL.
+If you use a hosted PostgreSQL database while testing locally, use that provider's public/external connection URL. Private/internal database hostnames usually only work from inside the provider's own runtime network.
 
-## Railway Deployment
+## Deployment
 
-Railway uses:
+ChatterRax is platform-agnostic. Any host that can run a Python web process, set environment variables, and connect to PostgreSQL can run it.
 
-- `railway.toml`
-- `Procfile`
-- `requirements.txt`
-- `gunicorn app:app`
+Typical production web command:
 
-Add variables in Railway's Variables tab. Railway does not automatically read `.env.railway.example`; use it as a copy/reference file.
+```text
+gunicorn app:app
+```
 
-Minimum Railway variables:
+The included `Procfile` declares the same command for hosts that support Procfile-style web processes:
+
+```text
+web: gunicorn app:app
+```
+
+Minimum hosted variables:
 
 ```env
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
@@ -149,7 +154,7 @@ Ticket email variables:
 ```env
 TICKET_EMAIL_ENABLED=True
 TICKET_EMAIL_TO=admin1@gmail.com,admin2@gmail.com
-TICKET_ADMIN_URL=https://your-railway-app.up.railway.app/admin
+TICKET_ADMIN_URL=https://your-app.example.com/admin
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USE_TLS=True
@@ -244,7 +249,8 @@ Each recipient receives a separate email.
 ## Production Notes
 
 - Do not commit `.env`, `.env.domain`, or `GEMINI_PROMPTS.md`.
+- Set production variables in your hosting provider's environment/secret settings.
 - Restart the app after changing domain env values.
 - Keep M365 as the placeholder/demo pack unless replacing it intentionally.
-- Use Railway's public database URL for local testing.
+- Use a public/external database URL for local testing against a hosted database.
 - If Gmail SMTP fails, verify the app password, 2-Step Verification, and recipient list.
