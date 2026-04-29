@@ -1,6 +1,15 @@
 import re
 from difflib import SequenceMatcher
 
+FUZZY_WINDOW_PREFIX_STOPWORDS = {
+    "a", "an", "and", "at", "for", "from", "in", "into", "my", "of",
+    "on", "the", "to", "with",
+}
+FUZZY_SERVICE_BLOCKED_WINDOWS = {
+    "broken", "crash", "crashed", "error", "failed", "fails", "issue",
+    "login", "problem", "stuck", "sync",
+}
+
 
 def normalize_message(message):
     return re.sub(r"\s+", " ", str(message or "").strip().lower())
@@ -66,6 +75,11 @@ def fuzzy_detect_service(message, service_keywords):
             for window in windows:
                 window_length = len(window)
                 if window_length == 0:
+                    continue
+                first_token = window.split()[0]
+                if first_token in FUZZY_WINDOW_PREFIX_STOPWORDS:
+                    continue
+                if window in FUZZY_SERVICE_BLOCKED_WINDOWS:
                     continue
                 if min(window_length, keyword_length) / max(window_length, keyword_length) < 0.55:
                     continue
