@@ -348,24 +348,6 @@ CHAT_STATE_TTL_SECONDS=21600
 `CHAT_STATE_TTL_SECONDS` controls how long in-memory chat state is kept before
 old browser/session state is pruned. The default is 21600 seconds, or 6 hours.
 
-### Learned Knowledge `.env`
-
-`providers/knowledge_provider.py` can optionally read learned knowledge from a
-custom JSON file when the active domain pack sets
-`include_learned_knowledge: true`:
-
-```text
-LEARNED_KNOWLEDGE_PATH=C:\path\to\learned_knowledge.json
-```
-
-If unset, it defaults to:
-
-```text
-Live_hosting_Project/data/learned_knowledge.json
-```
-
-For production, this can usually stay unset.
-
 ### Railway Variables
 
 On Railway, do not upload `.env`. Add the same values in the Railway Variables
@@ -375,10 +357,13 @@ tab. A typical M365 demo setup looks like:
 DATABASE_URL=postgresql://...
 GEMINI_ENABLED=True
 GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
-GEMINI_MODEL=gemini-2.5-flash-lite
-GEMINI_MAX_TOKENS=1024
-GEMINI_THINKING_BUDGET=0
+BOT_DOMAIN=microsoft365
+FLASK_DEBUG=False
 ```
 
-Leave `BOT_DOMAIN`, `BOT_DOMAINS`, and `BOT_DOMAIN_PATH` unset unless you want
-to override the default Microsoft 365 pack.
+Use `.env.example` as the clean import template for Railway suggested
+variables. It only lists variables this app currently reads.
+
+Remove any older Railway variables such as support-link or recommended-article
+URLs if they are still present in the Railway dashboard. The app no longer reads
+or needs those values.
