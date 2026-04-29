@@ -29,6 +29,7 @@ from backend.db.db_service import (
 )
 from scheduler import start_scheduler
 from providers.gemini_provider import get_gemini_health_status
+from providers.email_provider import send_ticket_created_email
 from backend.db.connection import get_connection
 
 app = Flask(
@@ -348,6 +349,7 @@ def chat():
         _append_conversation_turn(conversation_key, "bot", result["reply"])
 
         ticket_id = None
+        email_sent = False
         if result.get("needs_ticket") and result.get("needs_description"):
             if pending_ticket_request:
                 pending_ticket_request["latest_prompt"] = result["reply"]
@@ -392,6 +394,19 @@ def chat():
                 }), 500
 
             print(f"Ticket created: #{ticket_id}")
+            email_sent, email_error = send_ticket_created_email(
+                ticket_id=ticket_id,
+                user_name=user_name,
+                user_email=user_email,
+                user_department=user_department,
+                description=ticket_description,
+                priority=priority,
+                service=result.get("service"),
+                intent=result.get("intent"),
+                session_id=session_id,
+            )
+            if email_error and email_error != "disabled":
+                print(f"Warning: Ticket email for #{ticket_id} was not sent: {email_error}")
             with _STATE_LOCK:
                 PENDING_TICKET_REQUESTS.pop(conversation_key, None)
                 CONVERSATION_HISTORY.pop(conversation_key, None)
@@ -415,6 +430,7 @@ def chat():
             "knowledge_source": result.get("knowledge_source", ""),
             "knowledge_learned": result.get("knowledge_learned", False),
             "response_source": result.get("response_source", ""),
+            "ticket_email_sent": bool(email_sent),
             "error": False
         })
 

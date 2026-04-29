@@ -13,7 +13,7 @@
   "client": {
     "chat_subtitle": "Microsoft workplace support triage and ticket intake.",
     "input_placeholder": "Describe your Microsoft 365 issue...",
-    "welcome_template": "Hi{name_part} I am ChatterRax, a Microsoft 365 bot here to help you out. I can triage Microsoft workplace issues across Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account access.",
+    "welcome_template": "Hi{name_part} I am ChatterRax, a Microsoft 365 bot here to help you out. I can triage Microsoft workplace issues across Teams, Outlook, OneDrive, and more.",
     "quick_action_template": "Let's handle {label} next."
   },
   "routing": {

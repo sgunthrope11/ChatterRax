@@ -2753,6 +2753,39 @@ def _routing_terms(name):
     return _domain_tuple(DOMAIN_ROUTING.get(name))
 
 
+def _unique_display_items(items):
+    seen = set()
+    display_items = []
+    for item in items:
+        label = str(item or "").strip()
+        normalized = label.lower()
+        if not label or normalized in seen:
+            continue
+        seen.add(normalized)
+        display_items.append(label)
+    return display_items
+
+
+def _compact_display_list(items, limit=3):
+    display_items = _unique_display_items(items)
+    if not display_items:
+        return ""
+    if len(display_items) == 1:
+        return display_items[0]
+    if len(display_items) > limit:
+        return ", ".join(display_items[:limit]) + ", and more"
+    if len(display_items) == 2:
+        return " and ".join(display_items)
+    return ", ".join(display_items[:-1]) + f", and {display_items[-1]}"
+
+
+def _active_domain_labels():
+    labels = _domain_tuple(DOMAIN_PACK.get("domain_labels"))
+    if labels:
+        return _unique_display_items(labels)
+    return _unique_display_items(str(DOMAIN_LABEL or "").split(" + "))
+
+
 def _apply_domain_pack():
     global GREETING_REPLIES
     global SOCIAL_GREETING_REPLIES
@@ -2873,6 +2906,8 @@ _apply_domain_pack()
 
 def get_domain_client_config():
     client_config = DOMAIN_PACK.get("client") or {}
+    domain_labels = _active_domain_labels()
+    domain_summary = _compact_display_list(domain_labels)
     visible_services = [
         SERVICE_LABELS.get(service, service.title())
         for service in SERVICE_KEYWORDS
@@ -2886,19 +2921,26 @@ def get_domain_client_config():
         client_config.get("input_placeholder")
         or f"Describe your {DOMAIN_LABEL} issue..."
     )
-    welcome_template = str(
-        client_config.get("welcome_template")
-        or (
-            f"Hi{{name_part}} I am ChatterRax, a {DOMAIN_LABEL} bot here to help you out. "
-            f"I can triage {SUPPORTED_SCOPE_DESCRIPTION}"
+    if len(domain_labels) > 1:
+        welcome_template = (
+            f"Hi{{name_part}} I am ChatterRax, a support bot for {domain_summary}. "
+            "I can help triage issues across those domains and route tickets when needed."
         )
-    )
+    else:
+        welcome_template = str(
+            client_config.get("welcome_template")
+            or (
+                f"Hi{{name_part}} I am ChatterRax, a {DOMAIN_LABEL} bot here to help you out. "
+                f"I can triage {SUPPORTED_SCOPE_DESCRIPTION}"
+            )
+        )
     quick_action_template = str(
         client_config.get("quick_action_template")
         or "Let's handle {label} next."
     )
     return {
         "domain_label": DOMAIN_LABEL,
+        "domain_labels": domain_labels,
         "default_service": DEFAULT_SERVICE,
         "supported_scope": SUPPORTED_SCOPE_DESCRIPTION,
         "service_labels": visible_services,
@@ -3243,6 +3285,23 @@ def _should_inherit_recent_service(
     if word_count <= 6 and _contains_any(message, CONTEXT_FOLLOW_UP_TERMS):
         return True
     return False
+
+
+def _should_apply_ticket_context(message, related_match):
+    word_count = len(str(message or "").split())
+    if word_count <= 8:
+        return True
+    if related_match.get("referential") or related_match.get("score", 0) >= 2:
+        return True
+    if _contains_any(
+        message,
+        (
+            "this issue", "this problem", "that issue", "that problem",
+            "same issue", "same problem", "same one", "that one",
+        ),
+    ):
+        return True
+    return word_count <= 12 and _contains_any(message, CONTEXT_FOLLOW_UP_TERMS)
 
 
 
@@ -3997,6 +4056,15 @@ def _service_specific_prompt(service):
 def _strip_web_links(reply):
     """Keep model replies focused on steps; link fallback is handled separately."""
     return WEB_LINK_RE.sub("", str(reply or "")).strip()
+
+
+def _mark_gemini_reply(reply):
+    text = str(reply or "").strip()
+    if not text:
+        return text
+    if text.lower().endswith("-gemini"):
+        return text
+    return f"{text} -gemini"
 
 
 def _extract_error_codes(message):
@@ -5113,6 +5181,7 @@ def handle_message(message, awaiting_ticket_detail=False,
         and _is_default_service(service)
         and history_context.get("current_focus")
         and not _is_default_service(history_context.get("current_focus"))
+        and _should_apply_ticket_context(msg, related_match)
     ):
         service = history_context["current_focus"]
     multi_context = _get_multi_issue_context(msg, detected_services, hardware_context)
@@ -5842,6 +5911,7 @@ def handle_message(message, awaiting_ticket_detail=False,
         )
         if applied:
             applied["response_source"] = "gemini"
+            applied["reply"] = _mark_gemini_reply(applied.get("reply", ""))
             if keyword_context.get("found"):
                 applied.update({
                     "knowledge_retrieved": True,

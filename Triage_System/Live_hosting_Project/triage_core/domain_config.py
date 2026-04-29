@@ -99,6 +99,7 @@ def load_domain_pack(domain_name=None):
     pack.update(data)
     pack["name"] = _normalize_key(pack.get("name") or name) or name
     pack["domain_label"] = str(pack.get("domain_label") or DEFAULT_DOMAIN_LABEL)
+    pack["domain_labels"] = (pack["domain_label"],)
     pack["default_service"] = _normalize_key(pack.get("default_service") or DEFAULT_SERVICE)
     pack["_path"] = str(path)
     pack["_load_error"] = ""
@@ -204,6 +205,7 @@ def _merge_domain_packs(packs):
     return {
         "name": ",".join(names),
         "domain_names": tuple(names),
+        "domain_labels": tuple(labels),
         "domain_label": " + ".join(labels) or DEFAULT_DOMAIN_LABEL,
         "default_service": _normalize_key(default_pack.get("default_service") or DEFAULT_SERVICE),
         "supported_scope": " ".join(scopes),

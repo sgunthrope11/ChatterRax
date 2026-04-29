@@ -3,5 +3,9 @@ __pycache__/
 *.tmp
 data/*.json
 .env
+.env.*
+!.env.example
+!.env.railway.example
+GEMINI_PROMPTS.md
 .venv/
 venv/
