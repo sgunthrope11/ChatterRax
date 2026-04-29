@@ -17,6 +17,7 @@ const DOMAIN_CONFIG = window.CHATTERRAX_DOMAIN_CONFIG || {};
 
 let isSending = false;
 let profileSubmitted = false;
+let chatEnded = false;
 
 
 function buildWelcomeMessage(profile = {}) {
@@ -96,6 +97,19 @@ function createMessageElement(text, sender, options = {}) {
             if (actionList.childNodes.length) {
                 msg.appendChild(actionList);
             }
+        }
+
+        if (options.restartChat) {
+            const actionList = document.createElement("div");
+            actionList.className = "chat-quick-actions";
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "chat-quick-action";
+            button.textContent = "Restart Chat";
+            button.addEventListener("click", restartChatSession);
+            actionList.appendChild(button);
+            msg.appendChild(actionList);
         }
     } else {
         msg.textContent = text;
@@ -179,14 +193,55 @@ function saveUserProfile(profile) {
 
 
 function setChatAvailability(isAvailable) {
-    userInput.disabled = !isAvailable || isSending;
-    sendBtn.disabled = !isAvailable || isSending;
+    const canChat = isAvailable && !chatEnded;
+    userInput.disabled = !canChat || isSending;
+    sendBtn.disabled = !canChat || isSending;
 
     if (userInput.disabled) {
         userInput.classList.add("bg-slate-100", "text-slate-400", "cursor-not-allowed");
     } else {
         userInput.classList.remove("bg-slate-100", "text-slate-400", "cursor-not-allowed");
     }
+}
+
+
+function resetChatTranscript(profile = {}) {
+    chatBox.innerHTML = "";
+    renderWelcomeMessage(profile);
+    chatBox.appendChild(welcomeMessage);
+    chatBox.scrollTop = 0;
+}
+
+
+function clearStoredSession() {
+    sessionStorage.removeItem(PROFILE_STORAGE_KEY);
+    sessionStorage.removeItem(CHAT_CLIENT_ID_STORAGE_KEY);
+}
+
+
+function restartChatSession() {
+    clearStoredSession();
+    chatEnded = false;
+    isSending = false;
+    profileNameInput.value = "";
+    profileEmailInput.value = "";
+    profileDepartmentInput.value = "";
+    userInput.value = "";
+    resetChatTranscript({});
+    setProfileSubmittedState(false, "Enter your details to start a new support session.");
+    profileNameInput.focus();
+}
+
+
+function endChatAfterTicket(ticketId) {
+    chatEnded = true;
+    clearStoredSession();
+    setChatAvailability(false);
+    addMessage(
+        `Thanks, I have wrapped up this chat. Ticket #${ticketId} is with the admin team, so I will stop here. Restart the chat if you need help with another issue.`,
+        "bot",
+        { restartChat: true }
+    );
 }
 
 
@@ -269,7 +324,8 @@ function submitUserProfile() {
         return null;
     }
 
-    renderWelcomeMessage(profile);
+    chatEnded = false;
+    resetChatTranscript(profile);
     setProfileSubmittedState(true, "Details saved. Your support session is ready.");
     userInput.focus();
     return profile;
@@ -331,12 +387,16 @@ async function sendMessage() {
         }
 
         let botReply = data.reply || "Something went wrong. Please try again.";
-        if (!data.resolved && data.ticket_id) {
+        const ticketCreated = Boolean(data.ticket_id);
+        if (!data.resolved && ticketCreated) {
             botReply += ` Ticket #${data.ticket_id} has been created for the admin team.`;
         }
         addMessage(botReply, "bot", {
-            quickReplies: data.next_issue_options || []
+            quickReplies: ticketCreated ? [] : (data.next_issue_options || [])
         });
+        if (ticketCreated) {
+            endChatAfterTicket(data.ticket_id);
+        }
 
     } catch (error) {
         const elapsed = Date.now() - startedAt;
@@ -346,8 +406,10 @@ async function sendMessage() {
         addMessage(error.message || "Something went wrong. Please try again.", "bot");
     } finally {
         isSending = false;
-        setChatAvailability(true);
-        userInput.focus();
+        setChatAvailability(profileSubmitted);
+        if (!chatEnded) {
+            userInput.focus();
+        }
     }
 }
 
