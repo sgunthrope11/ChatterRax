@@ -4,6 +4,8 @@
   "default_service": "microsoft 365",
   "supported_scope": "Microsoft workplace support issues for Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account.",
   "description": "Default ChatterRax live-demo domain. This pack shows the same JSON-driven structure a replacement domain would use while keeping the built-in Microsoft 365 rules and knowledge active.",
+  "built_in_profile": "microsoft365",
+  "include_learned_knowledge": false,
   "replace_builtin_services": false,
   "replace_builtin_intents": false,
   "replace_builtin_knowledge": false,
@@ -13,6 +15,29 @@
     "input_placeholder": "Describe your Microsoft 365 issue...",
     "welcome_template": "Hi{name_part} I am ChatterRax Bot. I help triage Microsoft workplace issues across Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account access. Tell me what is going wrong and I will help sort the issue before we open a ticket.",
     "quick_action_template": "Let's handle {label} next."
+  },
+  "routing": {
+    "loose_service_terms": {
+      "outlook": ["email", "emails", "mail", "inbox", "bounce", "bounced"],
+      "teams": ["meeting", "meetings", "video call", "teams call", "channel", "chat"],
+      "onedrive": ["files", "cloud files", "upload", "uploading", "pending", "sync", "syncing"],
+      "microsoft account": ["authenticator", "verification code", "security code", "wrong password", "ms account", "microsoft login"],
+      "windows": ["dock", "docking station", "screen", "monitor", "printer", "scanner", "wifi", "wi-fi"]
+    },
+    "fuzzy_service_exclusions": {
+      "onedrive": ["usb drive", "usb stick", "usb stik", "flash drive", "flsh drv", "thumb drive", "external drive", "hard drive", "usb"]
+    },
+    "ignored_mapped_services": ["teams"],
+    "vague_service_bypass_terms": {
+      "teams": ["join", "join meeting", "join team", "join channel"]
+    },
+    "service_focus_overrides": [
+      {
+        "service": "sharepoint",
+        "when_services": ["word", "excel", "powerpoint"],
+        "terms": ["metadata", "required columns", "required column", "document info panel", "properties panel", "info panel"]
+      }
+    ]
   },
   "services": {
     "teams": {
@@ -91,6 +116,10 @@
       "keywords": ["sign in", "signin", "login", "password", "credentials", "authenticator", "verification code"],
       "wrap_up": "If sign-in still fails, keep the exact wording and do not share passwords or verification codes."
     },
+    "password_reset": {
+      "keywords": ["password reset", "reset password", "forgot password", "forgot my password"],
+      "wrap_up": "If the reset page will not accept your info, keep the exact sign-in message."
+    },
     "sync": {
       "keywords": ["sync", "syncing", "pending", "not updating", "missing", "stuck", "red x"],
       "wrap_up": "If sync still fails, compare the web version with the desktop app before opening a ticket."
@@ -122,6 +151,46 @@
     "printing": {
       "keywords": ["printer", "print", "scanner", "scan", "print queue"],
       "wrap_up": "If printing still fails, keep the printer name and queue status."
+    },
+    "activation": {
+      "keywords": ["activation", "activate", "license", "licensed", "unlicensed", "subscription"],
+      "wrap_up": "If activation still fails, confirm the license is assigned to the signed-in work account."
+    },
+    "status": {
+      "keywords": ["status", "presence", "available", "busy", "away"],
+      "wrap_up": "If status still looks wrong, compare the web app and desktop app."
+    },
+    "outage": {
+      "keywords": ["outage", "down", "service down", "not available", "unavailable"],
+      "wrap_up": "If many users are affected, include the affected group and when it started."
+    },
+    "escalation": {
+      "keywords": ["ticket", "agent", "human", "support", "representative"],
+      "wrap_up": "If you need hands-on help, include the app, exact symptom, and business impact."
+    },
+    "device_setup": {
+      "keywords": ["setup", "install", "device", "driver", "configure"],
+      "wrap_up": "If setup still fails, include the device model and exact setup screen."
+    },
+    "display": {
+      "keywords": ["display", "screen", "monitor", "view", "blank", "black screen"],
+      "wrap_up": "If display still fails, note whether it affects one app or the whole device."
+    },
+    "formatting": {
+      "keywords": ["formatting", "format", "font", "layout", "spacing", "bullets"],
+      "wrap_up": "If formatting still looks wrong, say whether it happens in one file or every file."
+    },
+    "notification": {
+      "keywords": ["notification", "notifications", "alert", "alerts", "banner"],
+      "wrap_up": "If notifications still do not appear, compare app settings and Windows notification settings."
+    },
+    "performance": {
+      "keywords": ["slow", "lag", "lagging", "performance", "takes forever"],
+      "wrap_up": "If it is still slow, note whether it affects one app or the whole device."
+    },
+    "unknown": {
+      "keywords": [],
+      "wrap_up": "If that path does not match what you see, send the exact wording and app screen."
     }
   },
   "service_intent_responses": {

@@ -72,6 +72,9 @@ def _empty_pack(domain_name, path=None, load_error=""):
         "service_intent_responses": {},
         "knowledge_resources": [],
         "gemini": {},
+        "client": {},
+        "routing": {},
+        "built_in_profile": "",
         "_path": str(path or ""),
         "_load_error": load_error,
     }
@@ -100,7 +103,20 @@ def load_domain_pack(domain_name=None):
     pack["_path"] = str(path)
     pack["_load_error"] = ""
 
-    for key in ("services", "intents", "service_intent_responses", "gemini", "client"):
+    replacement_default = (
+        pack["name"] != DEFAULT_DOMAIN_NAME
+        and not str(pack.get("built_in_profile") or "").strip()
+    )
+    for flag in (
+        "replace_builtin_services",
+        "replace_builtin_intents",
+        "replace_builtin_knowledge",
+        "replace_builtin_responses",
+    ):
+        if flag not in data:
+            pack[flag] = replacement_default
+
+    for key in ("services", "intents", "service_intent_responses", "gemini", "client", "routing"):
         if not isinstance(pack.get(key), dict):
             pack[key] = {}
     if not isinstance(pack.get("knowledge_resources"), list):
@@ -114,6 +130,26 @@ def _merge_dict_values(*values):
     for value in values:
         if isinstance(value, dict):
             merged.update(value)
+    return merged
+
+
+def _merge_nested_dict_values(*values):
+    merged = {}
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        for key, item in value.items():
+            if isinstance(item, dict):
+                current = merged.get(key)
+                if not isinstance(current, dict):
+                    current = {}
+                current.update(item)
+                merged[key] = current
+            elif isinstance(item, list):
+                current = merged.get(key)
+                merged[key] = (current if isinstance(current, list) else []) + item
+            else:
+                merged[key] = item
     return merged
 
 
@@ -132,7 +168,9 @@ def _merge_domain_packs(packs):
     responses = _merge_dict_values(*(pack.get("service_intent_responses") for pack in packs))
     gemini = {"extra_rules": []}
     client = {}
+    routing = _merge_nested_dict_values(*(pack.get("routing") for pack in packs))
     knowledge_resources = []
+    built_in_profiles = []
     labels = []
     scopes = []
     descriptions = []
@@ -157,6 +195,9 @@ def _merge_domain_packs(packs):
             load_errors.append(f"{pack.get('name')}: {load_error}")
         knowledge_resources.extend(pack.get("knowledge_resources") or [])
         client.update(pack.get("client") or {})
+        profile = str(pack.get("built_in_profile") or "").strip()
+        if profile and profile not in built_in_profiles:
+            built_in_profiles.append(profile)
         extra_rules = (pack.get("gemini") or {}).get("extra_rules") or []
         gemini["extra_rules"].extend(as_tuple(extra_rules))
 
@@ -173,6 +214,9 @@ def _merge_domain_packs(packs):
         "knowledge_resources": knowledge_resources,
         "gemini": gemini,
         "client": client,
+        "routing": routing,
+        "built_in_profile": built_in_profiles[0] if len(built_in_profiles) == 1 else "",
+        "built_in_profiles": tuple(built_in_profiles),
         "replace_builtin_services": not includes_default or all(
             bool(pack.get("replace_builtin_services")) for pack in packs
         ),

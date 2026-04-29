@@ -258,13 +258,14 @@ def looks_like_vague_service_message(
     short_service_action_terms,
     status_terms,
     strong_outage_terms,
-    teams_join_terms,
+    default_bypass_terms,
     explicit_service=None,
     fuzzy_service=None,
     hardware_context=None,
     known_issue=None,
     multi_context=None,
     default_service=None,
+    service_bypass_terms=None,
 ):
     if not service or (default_service and service == default_service):
         return False
@@ -278,7 +279,8 @@ def looks_like_vague_service_message(
         return False
     if contains_any(message, status_terms + strong_outage_terms):
         return False
-    if service == "teams" and contains_any(message, teams_join_terms):
+    bypass_terms = tuple(service_bypass_terms or ()) or default_bypass_terms
+    if bypass_terms and contains_any(message, bypass_terms):
         return False
 
     words = [word for word in str(message or "").split() if word.strip()]
@@ -423,26 +425,11 @@ def has_multi_issue_marker(message, topic_count, multi_issue_strong_markers):
     return topic_count >= 3 and " and " in f" {message} "
 
 
-def infer_loose_services(message, services):
+def infer_loose_services(message, services, loose_service_terms=None):
     inferred = list(services)
-
-    if contains_any(message, ("email", "emails", "mail", "inbox", "bounce", "bounced")):
-        append_unique(inferred, "outlook")
-    if contains_any(message, ("meeting", "meetings", "video call", "teams call", "channel", "chat")):
-        append_unique(inferred, "teams")
-    if (
-        contains_any(message, ("files", "cloud files", "upload", "uploading", "pending"))
-        or (
-            contains_any(message, ("sync", "syncing"))
-            and contains_any(message, ("onedrive", "one drive", "cloud", "folder", "file", "files"))
-        )
-    ):
-        if "sharepoint" not in inferred:
-            append_unique(inferred, "onedrive")
-    if contains_any(message, ("authenticator", "verification code", "security code", "wrong password", "ms account", "microsoft login")):
-        append_unique(inferred, "microsoft account")
-    if contains_any(message, ("dock", "docking station", "screen", "monitor", "printer", "scanner", "wifi", "wi-fi")):
-        append_unique(inferred, "windows")
+    for service, terms in (loose_service_terms or {}).items():
+        if contains_any(message, terms):
+            append_unique(inferred, service)
 
     return inferred
 
@@ -506,16 +493,21 @@ def get_multi_issue_context(
     hardware_service_map,
     multi_issue_strong_markers,
     default_service=None,
+    loose_service_terms=None,
+    fuzzy_service_exclusions=None,
+    ignored_mapped_services=None,
 ):
     hardware_terms = hardware_context.get("hardware_terms") or []
-    services = infer_loose_services(message, detected_services)
+    services = infer_loose_services(
+        message,
+        detected_services,
+        loose_service_terms=loose_service_terms,
+    )
     fuzzy_service = fuzzy_detect_service_fn(message)
     if (
-        fuzzy_service == "onedrive"
-        and hardware_context.get("hardware_term") in {
-            "usb drive", "usb stick", "usb stik", "flash drive",
-            "flsh drv", "thumb drive", "external drive", "hard drive", "usb",
-        }
+        fuzzy_service
+        and hardware_context.get("hardware_term")
+        in set((fuzzy_service_exclusions or {}).get(fuzzy_service, ()))
     ):
         fuzzy_service = None
     append_unique(services, fuzzy_service)
@@ -539,9 +531,10 @@ def get_multi_issue_context(
     )
 
     if is_multi:
+        ignored_mapped_services = set(ignored_mapped_services or ())
         for term in hardware_terms:
             mapped_service = hardware_service_map.get(term)
-            if mapped_service and mapped_service != "teams":
+            if mapped_service and mapped_service not in ignored_mapped_services:
                 append_unique(services, mapped_service)
 
     return {

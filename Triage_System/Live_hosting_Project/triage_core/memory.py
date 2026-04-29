@@ -15,7 +15,7 @@ MEMORY_STOPWORDS = {
 
 REFERENTIAL_TERMS = (
     "same", "again", "still", "before", "back to", "earlier", "previous",
-    "that issue", "that one", "that problem", "that outlook issue",
+    "that issue", "that one", "that problem",
     "same issue", "same issue as before", "issue as before",
 )
 
@@ -138,6 +138,7 @@ def build_thread_memory(
     fuzzy_detect_service,
     detect_intent,
     default_service=None,
+    service_conflict_resolver=None,
 ):
     threads_by_service = {}
     last_service = None
@@ -171,22 +172,10 @@ def build_thread_memory(
             if resolved_service:
                 candidate_services = [resolved_service]
 
-        if (
-            "sharepoint" in candidate_services
-            and any(service_name in {"word", "excel", "powerpoint"} for service_name in candidate_services)
-            and any(
-                phrase in message
-                for phrase in (
-                    "metadata",
-                    "required columns",
-                    "required column",
-                    "document info panel",
-                    "properties panel",
-                    "info panel",
-                )
-            )
-        ):
-            candidate_services = ["sharepoint"]
+        if service_conflict_resolver:
+            resolved_services = service_conflict_resolver(candidate_services, message)
+            if resolved_services:
+                candidate_services = list(resolved_services)
 
         normalized_services = []
         for service in candidate_services:

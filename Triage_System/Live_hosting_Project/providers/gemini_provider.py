@@ -59,58 +59,17 @@ _PAUSE_UNTIL = 0.0
 _CONSECUTIVE_429S = 0
 DOMAIN_PACK = load_domain_packs()
 DOMAIN_DEFAULT_SERVICE = DOMAIN_PACK.get("default_service") or DEFAULT_SERVICE
-DOMAIN_LABEL = DOMAIN_PACK.get("domain_label") or "Microsoft 365"
+DOMAIN_LABEL = DOMAIN_PACK.get("domain_label") or DOMAIN_DEFAULT_SERVICE.title()
 
-_BASE_ALLOWED_SERVICES = {
-    "teams",
-    "outlook",
-    "onedrive",
-    "sharepoint",
-    "excel",
-    "word",
-    "powerpoint",
-    "windows",
-    "microsoft account",
-    "microsoft 365",
-}
-_BASE_ALLOWED_INTENTS = {
-    "password_reset",
-    "sign_in",
-    "sync",
-    "crash",
-    "status",
-    "outage",
-    "escalation",
-    "email_delivery",
-    "permissions",
-    "device_setup",
-    "audio",
-    "video",
-    "display",
-    "formatting",
-    "printing",
-    "unknown",
-}
-if DOMAIN_PACK.get("replace_builtin_services"):
-    _ALLOWED_SERVICES = service_names(DOMAIN_PACK)
-else:
-    _ALLOWED_SERVICES = _BASE_ALLOWED_SERVICES | service_names(DOMAIN_PACK)
-if DOMAIN_PACK.get("replace_builtin_intents"):
-    _ALLOWED_INTENTS = intent_names(DOMAIN_PACK) | {"unknown"}
-else:
-    _ALLOWED_INTENTS = _BASE_ALLOWED_INTENTS | intent_names(DOMAIN_PACK) | {"unknown"}
+_ALLOWED_SERVICES = service_names(DOMAIN_PACK) or {DOMAIN_DEFAULT_SERVICE}
+_ALLOWED_INTENTS = intent_names(DOMAIN_PACK) | {"unknown"}
 _ALLOWED_PRIORITIES = {"low", "medium", "high"}
 _SERVICE_VALUES_TEXT = ", ".join(sorted(_ALLOWED_SERVICES | {"unknown"}))
 _INTENT_VALUES_TEXT = ", ".join(sorted(_ALLOWED_INTENTS))
-_IS_MICROSOFT_DOMAIN = "microsoft 365" in _ALLOWED_SERVICES
 _ROUTING_RULES_TEXT = (
-    """Do not switch to microsoft account unless the user is mainly locked out of the account itself, missing verification codes, or recovering account access.
-Password prompts inside Outlook, Teams, OneDrive, or Microsoft 365 apps should usually stay with that app.
-Map meeting audio/video with Teams mention to teams; file sync/cloud backup to onedrive; device, driver, install, printer, dock, Bluetooth, USB, Wi-Fi, monitor, mic, webcam, headset to windows unless a better Microsoft app fit is obvious."""
-    if _IS_MICROSOFT_DOMAIN
-    else """Stay inside the configured domain services. If the user mentions multiple supported areas, choose the one that owns the current symptom.
+    """Stay inside the configured domain services. If the user mentions multiple supported areas, choose the one that owns the current symptom.
 If the service or issue is unclear, ask one focused clarification question instead of guessing.
-Use only the configured service values; do not introduce Microsoft-specific service names unless they are listed."""
+Use only the configured service values; do not introduce unconfigured service names."""
 )
 _DOMAIN_EXTRA_RULES = tuple(
     str(rule).strip()
@@ -439,7 +398,7 @@ Use high only for widespread outages, multiple users affected, or a clearly work
 Use low for minor cosmetic or convenience issues like signatures, notifications, formatting, themes, or non-blocking preferences.
 Use medium for the normal single-user support case.
 {_DOMAIN_EXTRA_RULES_TEXT}
-Example schema: {{"service":"outlook","intent":"sync","needs_ticket":false,"needs_description":false,"priority":"medium","reply":"..."}}
+Example schema: {{"service":"{DOMAIN_DEFAULT_SERVICE}","intent":"sync","needs_ticket":false,"needs_description":false,"priority":"medium","reply":"..."}}
 {history_block}
 {thread_block}
 {session_summary_block}
@@ -483,7 +442,7 @@ def _reply_requests_sensitive_info(reply_text):
 
 
 def _safe_reply_for_sensitive_request(service):
-    generic_label = "this Microsoft app" if _IS_MICROSOFT_DOMAIN else "this service"
+    generic_label = "this service"
     label = str(service or "").strip() or generic_label
     if label == "unknown":
         label = generic_label
@@ -510,8 +469,6 @@ def _sanitize_result(raw_result, service_hint=None):
         "unknown",
     )
     allowed_fallback_services = _ALLOWED_SERVICES | {DOMAIN_DEFAULT_SERVICE}
-    if _IS_MICROSOFT_DOMAIN:
-        allowed_fallback_services.add("microsoft 365")
     if model_service != "unknown":
         service = model_service
     elif service_fallback in allowed_fallback_services:

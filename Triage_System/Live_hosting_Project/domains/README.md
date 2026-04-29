@@ -74,10 +74,16 @@ Then the loaded pack is used in three places:
 - `INTENT_KEYWORDS`: words that map to intents like `sync`, `sign_in`, or `update`.
 - `SHORT_STEP_RESPONSES`: short deterministic troubleshooting steps.
 - `SERVICE_INTENT_RESPONSES`: exact replies for a service plus intent pair.
+- `routing`: optional routing hints such as loose service terms, service conflict rules, and fuzzy-match exclusions.
 
 The Microsoft 365 pack intentionally does not replace the built-in replies. It
 acts as the default domain identity while the current Microsoft demo behavior
 stays active.
+
+For a single non-built-in replacement domain, the app now defaults the
+`replace_builtin_*` flags to `true` if you leave them unset. That keeps a new
+domain clean by default. Use `BOT_DOMAINS=microsoft365,another_domain` only when
+you intentionally want an overlay demo that combines packs.
 
 ## Where Knowledge Lives
 
@@ -88,14 +94,14 @@ There are two knowledge sources:
 2. Optional JSON knowledge resources inside a domain pack under
    `knowledge_resources`.
 
-For the current Microsoft 365 demo, most content lives in the Python knowledge
-resource files. The JSON pack is the plug-in point for future replacement or
-overlay content.
+For the current Microsoft 365 demo, the built-in Microsoft playbook remains
+available only because the Microsoft pack declares `built_in_profile:
+"microsoft365"`. Replacement domains do not receive that built-in Microsoft
+knowledge unless they are deliberately loaded alongside the Microsoft pack.
 
 If a future pack defines `knowledge_resources`, `providers/knowledge_provider.py`
-normalizes those entries and adds them to retrieval. If the pack sets
-`replace_builtin_knowledge: true`, only the pack's knowledge is used unless
-`include_learned_knowledge` is also enabled.
+normalizes those entries and adds them to retrieval. Runtime learned knowledge is
+off unless the pack sets `include_learned_knowledge: true`.
 
 ## Is The JSON Needed After Startup?
 
@@ -126,7 +132,10 @@ A domain pack can define:
 - `domain_label`: display label for the active domain.
 - `default_service`: fallback service when no specific service is detected.
 - `supported_scope`: text used when the bot explains what it supports.
+- `built_in_profile`: optional internal profile name. Leave this out for replacement domains.
+- `include_learned_knowledge`: whether to load runtime learned knowledge from `LEARNED_KNOWLEDGE_PATH`.
 - `client`: browser-facing text such as subtitle, input placeholder, welcome message, and quick-action prompt template.
+- `routing`: optional domain-owned routing hints.
 - `services`: service labels, keyword lists, follow-up prompts, reply openers, and capability terms.
 - `intents`: intent keyword lists and short deterministic troubleshooting steps.
 - `service_intent_responses`: exact service+intent replies keyed as `"service|intent"`.
@@ -140,8 +149,82 @@ Replacement flags:
 - `replace_builtin_knowledge`
 - `replace_builtin_responses`
 
-These are useful for future non-Microsoft domains. For the current Microsoft 365
-demo, leave them false or unset.
+For a single replacement domain, omitted replacement flags default to `true`.
+For the current Microsoft 365 demo, they are explicitly false so the live demo
+keeps the Microsoft built-in behavior.
+
+## Replacement Domain Example
+
+Create:
+
+```text
+domains/crm/domain.json
+```
+
+Minimal replacement pack:
+
+```json
+{
+  "name": "crm",
+  "domain_label": "CRM",
+  "default_service": "crm portal",
+  "supported_scope": "CRM account, billing, and inventory support.",
+  "client": {
+    "chat_subtitle": "CRM support triage.",
+    "input_placeholder": "Describe your CRM issue...",
+    "welcome_template": "Hi{name_part} I help triage CRM issues. Tell me what is going wrong.",
+    "quick_action_template": "Work on {label}."
+  },
+  "services": {
+    "billing portal": {
+      "label": "Billing Portal",
+      "keywords": ["billing", "invoice", "payment"],
+      "follow_up": "Tell me which billing action failed.",
+      "reply_opener": "For Billing Portal, start with the invoice or payment action.",
+      "capability_terms": ["invoice", "payment"]
+    }
+  },
+  "intents": {
+    "sign_in": {
+      "keywords": ["login", "sign in", "password"],
+      "wrap_up": "If sign-in still fails, keep the exact error message."
+    }
+  },
+  "service_intent_responses": {
+    "billing portal|sign_in": [
+      "Billing Portal sign-in needs the account and browser path checked first.",
+      "Try a private browser window and confirm the account shown on the sign-in page."
+    ]
+  },
+  "knowledge_resources": [
+    {
+      "id": "crm_billing_login",
+      "service": "billing portal",
+      "intent": "sign_in",
+      "title": "Billing portal login fails",
+      "keywords": ["billing", "login", "sign in"],
+      "steps": [
+        "Open the billing portal in a private browser window.",
+        "Confirm the account email shown on the login page."
+      ]
+    }
+  ],
+  "gemini": {
+    "extra_rules": [
+      "Stay inside CRM support. Do not route to services outside this pack."
+    ]
+  }
+}
+```
+
+Then set:
+
+```text
+BOT_DOMAIN=crm
+```
+
+Because this is not a built-in profile, the Microsoft demo data is replaced by
+default.
 
 ## `.env` Examples
 
@@ -268,7 +351,8 @@ old browser/session state is pruned. The default is 21600 seconds, or 6 hours.
 ### Learned Knowledge `.env`
 
 `providers/knowledge_provider.py` can optionally read learned knowledge from a
-custom JSON file:
+custom JSON file when the active domain pack sets
+`include_learned_knowledge: true`:
 
 ```text
 LEARNED_KNOWLEDGE_PATH=C:\path\to\learned_knowledge.json
@@ -280,7 +364,7 @@ If unset, it defaults to:
 Live_hosting_Project/data/learned_knowledge.json
 ```
 
-For the current Microsoft 365 demo, this can usually stay unset.
+For production, this can usually stay unset.
 
 ### Railway Variables
 

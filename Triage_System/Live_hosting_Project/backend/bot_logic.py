@@ -2702,18 +2702,25 @@ HARDWARE_FALLBACK_RESPONSES = {
 
 DOMAIN_PACK = load_domain_packs()
 DEFAULT_SERVICE = str(DOMAIN_PACK.get("default_service") or _BASE_DEFAULT_SERVICE).strip().lower()
-DOMAIN_LABEL = str(DOMAIN_PACK.get("domain_label") or "Microsoft 365").strip()
+DOMAIN_LABEL = str(DOMAIN_PACK.get("domain_label") or "Support").strip()
 ACTIVE_DOMAIN_NAMES = tuple(
-    DOMAIN_PACK.get("domain_names") or (DOMAIN_PACK.get("name") or "microsoft365",)
+    str(item or "").strip().lower()
+    for item in _domain_tuple(DOMAIN_PACK.get("domain_names") or DOMAIN_PACK.get("name"))
+    if str(item or "").strip()
 )
-IS_MICROSOFT_DOMAIN = "microsoft365" in ACTIVE_DOMAIN_NAMES or DEFAULT_SERVICE == "microsoft 365"
+ACTIVE_DOMAIN_PROFILES = tuple(
+    str(item or "").strip().lower()
+    for item in (
+        _domain_tuple(DOMAIN_PACK.get("built_in_profiles"))
+        + _domain_tuple(DOMAIN_PACK.get("built_in_profile"))
+    )
+    if str(item or "").strip()
+)
+IS_MICROSOFT_DOMAIN = "microsoft365" in ACTIVE_DOMAIN_PROFILES
+DOMAIN_ROUTING = DOMAIN_PACK.get("routing") if isinstance(DOMAIN_PACK.get("routing"), dict) else {}
 SUPPORTED_SCOPE_DESCRIPTION = str(
     DOMAIN_PACK.get("supported_scope")
-    or (
-        "Microsoft workplace support issues for Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account."
-        if IS_MICROSOFT_DOMAIN
-        else f"{DOMAIN_LABEL} support issues."
-    )
+    or f"{DOMAIN_LABEL} support issues."
 ).strip()
 
 
@@ -2729,6 +2736,21 @@ def _merge_terms(existing, incoming, replace=False):
     if replace:
         return unique_tuple(incoming)
     return unique_tuple(existing, incoming)
+
+
+def _routing_terms_map(name):
+    raw_map = DOMAIN_ROUTING.get(name) or {}
+    if not isinstance(raw_map, dict):
+        return {}
+    return {
+        _domain_key(key): _domain_tuple(value)
+        for key, value in raw_map.items()
+        if _domain_key(key)
+    }
+
+
+def _routing_terms(name):
+    return _domain_tuple(DOMAIN_ROUTING.get(name))
 
 
 def _apply_domain_pack():
@@ -2912,6 +2934,29 @@ def _contains_any(text, terms):
     return _contains_any_core(text, terms)
 
 
+def _resolve_service_conflicts(candidate_services, message):
+    services = [service for service in candidate_services if service]
+    for rule in DOMAIN_ROUTING.get("service_focus_overrides") or []:
+        if not isinstance(rule, dict):
+            continue
+        preferred = _domain_key(rule.get("service"))
+        competing = {
+            _domain_key(item)
+            for item in _domain_tuple(rule.get("when_services") or rule.get("competing_services"))
+            if _domain_key(item)
+        }
+        terms = _domain_tuple(rule.get("terms"))
+        if (
+            preferred
+            and preferred in services
+            and competing
+            and any(service in competing for service in services)
+            and _contains_any(message, terms)
+        ):
+            return [preferred]
+    return services
+
+
 def _detect_all_services(message):
     return _detect_all_services_core(message, SERVICE_KEYWORDS)
 
@@ -2934,6 +2979,8 @@ def _service_label(service):
 
 
 def _detect_unsupported_service(message):
+    if not IS_MICROSOFT_DOMAIN:
+        return None
     return _detect_unsupported_service_core(
         message,
         UNSUPPORTED_STATUS_KEYWORDS,
@@ -3080,6 +3127,7 @@ def _build_thread_memory(conversation_history, session_summary=""):
         fuzzy_detect_service=_fuzzy_detect_service,
         detect_intent=_detect_intent,
         default_service=DEFAULT_SERVICE,
+        service_conflict_resolver=_resolve_service_conflicts,
     )
     return _merge_thread_memory_with_session_summary(thread_memory, session_summary)
 
@@ -3596,13 +3644,14 @@ def _looks_like_vague_service_message(message, service, intent,
         SHORT_SERVICE_ACTION_TERMS,
         (),
         STRONG_OUTAGE_TERMS,
-        TEAMS_JOIN_TERMS,
+        (),
         explicit_service=explicit_service,
         fuzzy_service=fuzzy_service,
         hardware_context=hardware_context,
         known_issue=known_issue,
         multi_context=multi_context,
         default_service=DEFAULT_SERVICE,
+        service_bypass_terms=_routing_terms_map("vague_service_bypass_terms").get(service, ()),
     )
 
 
@@ -3701,6 +3750,9 @@ def _get_multi_issue_context(message, detected_services, hardware_context):
         _active_hardware_service_map(),
         MULTI_ISSUE_STRONG_MARKERS,
         default_service=DEFAULT_SERVICE,
+        loose_service_terms=_routing_terms_map("loose_service_terms"),
+        fuzzy_service_exclusions=_routing_terms_map("fuzzy_service_exclusions"),
+        ignored_mapped_services=_routing_terms("ignored_mapped_services"),
     )
 
 
