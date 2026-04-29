@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     user_id        INTEGER     NOT NULL REFERENCES users(user_id),
     ticket_id      INTEGER     REFERENCES tickets(ticket_id),
     start_time     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    end_time       TIMESTAMPTZ          DEFAULT NOW(),
+    end_time       TIMESTAMPTZ          DEFAULT NULL,
     session_status VARCHAR(20)          DEFAULT 'Active'
 );
 

@@ -165,6 +165,8 @@ def save_chat_message(session_id, sender, message_text):
         return True
 
     except Exception as e:
+        if conn:
+            conn.rollback()
         print("Error saving chat message:", e)
         return False
 

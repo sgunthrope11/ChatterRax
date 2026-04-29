@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -137,7 +138,8 @@ def run_cleanup():
 
 
 def start_scheduler():
-    """Start the background scheduler and run cleanup once immediately on startup."""
+    """Start the background scheduler. Weekly cleanup runs every Sunday at midnight.
+    An initial cleanup fires 60 seconds after startup so the first request is not delayed."""
     scheduler = BackgroundScheduler()
     scheduler.add_job(
         run_cleanup,
@@ -145,6 +147,12 @@ def start_scheduler():
         id="weekly_cleanup",
         replace_existing=True,
     )
+    scheduler.add_job(
+        run_cleanup,
+        "date",
+        run_date=datetime.now() + timedelta(seconds=60),
+        id="startup_cleanup",
+        replace_existing=True,
+    )
     scheduler.start()
-    run_cleanup()
     return scheduler

@@ -63,6 +63,7 @@ Ignored local files:
 
 - `.env` - local secrets and service credentials
 - `.env.domain` - local domain switching
+- `.admin_credentials` - optional local admin credential notes
 - `GEMINI_PROMPTS.md` - private demo prompts
 
 ## Local Environment Setup
@@ -79,6 +80,9 @@ GEMINI_TIMEOUT_SECONDS=30
 
 FLASK_DEBUG=False
 CHAT_STATE_TTL_SECONDS=21600
+
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change_this_password
 
 TICKET_EMAIL_ENABLED=False
 TICKET_EMAIL_TO=admin1@gmail.com,admin2@gmail.com
@@ -131,13 +135,13 @@ ChatterRax is platform-agnostic. Any host that can run a Python web process, set
 Typical production web command:
 
 ```text
-gunicorn app:app
+gunicorn app:app -w 1 --threads 4
 ```
 
 The included `Procfile` declares the same command for hosts that support Procfile-style web processes:
 
 ```text
-web: gunicorn app:app
+web: gunicorn app:app -w 1 --threads 4
 ```
 
 Minimum hosted variables:
@@ -148,7 +152,11 @@ GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 GEMINI_ENABLED=True
 BOT_DOMAIN=microsoft365
 FLASK_DEBUG=False
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=CHANGE_THIS_PASSWORD
 ```
+
+Admin routes require HTTP Basic Auth. Set `ADMIN_USERNAME` and `ADMIN_PASSWORD` before opening `/admin`, `/tickets`, or `/tickets/update`.
 
 Ticket email variables:
 

@@ -1,12 +1,14 @@
 import json
 import os
 import re
+import secrets
 import sys
 import threading
 import time
+from functools import wraps
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
 
 # Load environment variables before importing providers that read config at import time.
 _ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -85,6 +87,40 @@ PURE_TICKET_REQUESTS = {
     "human",
     "agent",
 }
+
+
+def _require_admin_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        admin_username = os.environ.get("ADMIN_USERNAME", "")
+        admin_password = os.environ.get("ADMIN_PASSWORD", "")
+        if not admin_username or not admin_password:
+            return Response(
+                "Admin credentials not configured.",
+                401,
+                {"WWW-Authenticate": 'Basic realm="Admin"'},
+            )
+        auth = request.authorization
+        if not auth:
+            return Response(
+                "Authentication required.",
+                401,
+                {"WWW-Authenticate": 'Basic realm="Admin"'},
+            )
+        username_ok = secrets.compare_digest(
+            auth.username.encode("utf-8"), admin_username.encode("utf-8")
+        )
+        password_ok = secrets.compare_digest(
+            auth.password.encode("utf-8"), admin_password.encode("utf-8")
+        )
+        if not username_ok or not password_ok:
+            return Response(
+                "Invalid credentials.",
+                401,
+                {"WWW-Authenticate": 'Basic realm="Admin"'},
+            )
+        return f(*args, **kwargs)
+    return decorated
 
 
 def _conversation_key(user_email, client_session_id=None):
@@ -194,6 +230,7 @@ def chatbot_page():
 
 
 @app.route("/admin")
+@_require_admin_auth
 def admin_page():
     return render_template("admin.html")
 
@@ -307,8 +344,8 @@ def chat():
         with _STATE_LOCK:
             session_id = ACTIVE_SESSIONS.get(conversation_key)
         if not session_id:
-            session_id = create_chat_session(user_id, ticket_id=None)
-            if session_id is None:
+            new_session_id = create_chat_session(user_id, ticket_id=None)
+            if new_session_id is None:
                 return jsonify({
                     "reply": "We are experiencing technical difficulties. Please try again shortly.",
                     "resolved": False,
@@ -316,8 +353,10 @@ def chat():
                     "error": True
                 }), 500
             with _STATE_LOCK:
-                session_id = ACTIVE_SESSIONS.setdefault(conversation_key, session_id)
+                session_id = ACTIVE_SESSIONS.setdefault(conversation_key, new_session_id)
                 SESSION_LAST_SEEN[conversation_key] = time.time()
+                if session_id != new_session_id:
+                    print(f"Warning: Session {new_session_id} was orphaned due to concurrent create for {conversation_key}")
 
         user_message_saved = save_chat_message(session_id, "user", user_message)
         if not user_message_saved:
@@ -353,7 +392,8 @@ def chat():
         email_sent = False
         if result.get("needs_ticket") and result.get("needs_description"):
             if pending_ticket_request:
-                pending_ticket_request["latest_prompt"] = result["reply"]
+                with _STATE_LOCK:
+                    pending_ticket_request["latest_prompt"] = result["reply"]
             else:
                 initial_issue_message = user_message
                 if _looks_like_pure_ticket_request(user_message):
@@ -451,6 +491,7 @@ def chat():
 # in progress tickets
 # =========================
 @app.route("/tickets", methods=["GET"])
+@_require_admin_auth
 def tickets():
     try:
         ticket_list = get_open_tickets()
@@ -480,6 +521,7 @@ def tickets():
 # updates a ticket status
 # =========================
 @app.route("/tickets/update", methods=["POST"])
+@_require_admin_auth
 def tickets_update():
     try:
         data = request.get_json(silent=True)

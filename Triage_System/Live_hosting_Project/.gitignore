@@ -11,3 +11,4 @@ data/*.json
 GEMINI_PROMPTS.md
 .venv/
 venv/
+.admin_credentials
