@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.tmp
+data/*.json
+.env
+.env.*
+!.env.example
+!.env.domain.example
+!.env.railway.example
+GEMINI_PROMPTS.md
+.venv/
+venv/

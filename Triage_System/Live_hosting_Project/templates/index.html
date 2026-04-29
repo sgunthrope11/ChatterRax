@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatterRax | Intelligent Support Intake</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='wpunj-logo.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='wpunj-logo.png') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chatterrax.css') }}">
+</head>
+<body style="min-height:100vh; display:flex; flex-direction:column; background:#f8fafc;">
+
+    <nav class="landing-nav">
+        <div class="landing-nav-inner">
+            <div class="landing-brand">
+                <div class="brand-mark landing-brand-mark" aria-hidden="true">
+                    <img src="{{ url_for('static', filename='wpunj-logo.png') }}" alt="">
+                </div>
+                <span class="landing-brand-title">ChatterRax</span>
+                <span class="landing-brand-sub">AI-First Ticket Triage</span>
+            </div>
+            <div class="landing-nav-links">
+                <a href="{{ url_for('chatbot_page') }}" class="active">Support Intake</a>
+                <a href="{{ url_for('admin_page') }}">Admin Console</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="landing-main">
+        <div class="landing-grid">
+
+            <!-- Hero copy -->
+            <div class="landing-hero">
+                <h1>
+                    Fast help, cleaner triage,<br>
+                    <span class="accent">fewer handoff gaps.</span>
+                </h1>
+                <p>
+                    ChatterRax collects user details, cross-references support scenarios, and intelligently
+                    escalates unresolved issues into prioritized tickets for immediate team review.
+                </p>
+                <ul class="landing-features">
+                    <li>
+                        <div class="landing-feature-icon">
+                            <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                        </div>
+                        <span>24/7 Bot-First Intake</span>
+                    </li>
+                    <li>
+                        <div class="landing-feature-icon">
+                            <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                        </div>
+                        <span>Live SQL Ticket Storage</span>
+                    </li>
+                    <li>
+                        <div class="landing-feature-icon">
+                            <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                        </div>
+                        <span>Dedicated Admin Review Console</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Intake + chat card -->
+            <div class="landing-card">
+                <div class="landing-card-accent"></div>
+
+                <!-- Intake panel -->
+                <section id="intake-panel">
+                    <h2>Start Your Support Session</h2>
+                    <p class="card-sub">Provide your details below to initialize a secure chat session. Our system will generate a ticket automatically if needed.</p>
+
+                    <form id="profile-form">
+                        <div class="landing-form-fields">
+                            <div>
+                                <label class="landing-label" for="profile-name">Full Name</label>
+                                <input type="text" id="profile-name" name="name" class="landing-input" placeholder="e.g., Jane Doe" required>
+                            </div>
+                            <div>
+                                <label class="landing-label" for="profile-email">Work Email</label>
+                                <input type="email" id="profile-email" name="email" class="landing-input" placeholder="jane.doe@northstarops.com" required>
+                            </div>
+                            <div>
+                                <label class="landing-label" for="profile-department">Department or Team</label>
+                                <input type="text" id="profile-department" name="department" class="landing-input" placeholder="e.g., Finance Operations" required>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:1.75rem;">
+                            <button id="profile-submit-btn" type="submit" class="landing-submit-btn">
+                                Start Chat
+                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                            </button>
+                        </div>
+
+                        <p id="profile-submit-status" class="landing-footnote">
+                            Your data is securely logged for internal follow-up.
+                        </p>
+                    </form>
+                </section>
+
+                <!-- Chat panel (shown after profile submit) -->
+                <section id="chat-panel" class="hidden">
+                    <div class="chat-panel-header">
+                        <div>
+                            <h2 class="chat-panel-title">ChatterRax Chat</h2>
+                            <p id="chat-domain-subtitle" class="card-sub chat-panel-subtitle">{{ domain_config.chat_subtitle }}</p>
+                        </div>
+                    </div>
+
+                    <div id="chat-box">
+                        <div id="chat-welcome-message" class="chat-msg-bot chat-welcome-bubble">
+                            {{ domain_config.welcome_template | replace("{name_part}", " there,") }}
+                        </div>
+                    </div>
+
+                    <div class="chat-composer">
+                        <input type="text" id="user-input" class="landing-input" placeholder="{{ domain_config.input_placeholder }}" autocomplete="off" style="flex:1;">
+                        <button id="send-btn" type="button" class="landing-submit-btn" style="width:auto; padding:0.75rem 1.25rem;">
+                            Send
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        window.CHATTERRAX_DOMAIN_CONFIG = {{ domain_config | tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
+</body>
+</html>
