@@ -21,7 +21,7 @@
       "outlook": ["email", "emails", "mail", "inbox", "bounce", "bounced"],
       "teams": ["meeting", "meetings", "video call", "teams call", "channel", "chat"],
       "onedrive": ["files", "cloud files", "upload", "uploading", "pending", "sync", "syncing"],
-      "microsoft account": ["authenticator", "verification code", "security code", "wrong password", "ms account", "microsoft login"],
+      "microsoft account": ["authenticator", "verification code", "security code", "ms account", "microsoft account", "microsoft login"],
       "windows": ["dock", "docking station", "screen", "monitor", "printer", "scanner", "wifi", "wi-fi"]
     },
     "fuzzy_service_exclusions": {

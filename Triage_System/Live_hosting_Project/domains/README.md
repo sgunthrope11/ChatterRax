@@ -1,11 +1,14 @@
 # Domain Packs
 
-ChatterRax currently ships with one domain pack:
+ChatterRax currently ships with two domain packs:
 
 - `domains/microsoft365/domain.json`
+- `domains/test/domain.json`
 
-That pack keeps the live demo focused on Microsoft 365. If no domain environment
-variable is set, ChatterRax automatically loads `microsoft365`.
+The Microsoft 365 pack keeps the live demo focused on Microsoft 365. If no
+domain environment variable is set, ChatterRax automatically loads
+`microsoft365`. The test pack is included so you can demo replacement and
+multi-domain behavior without editing the M365 pack.
 
 ## Environment Setup
 
@@ -22,6 +25,13 @@ $env:BOT_DOMAIN = "microsoft365"
 python app.py
 ```
 
+To replace Microsoft 365 with the test pack:
+
+```powershell
+$env:BOT_DOMAIN = "test"
+python app.py
+```
+
 To point directly at a JSON file:
 
 ```powershell
@@ -29,10 +39,10 @@ $env:BOT_DOMAIN_PATH = "C:\path\to\domain.json"
 python app.py
 ```
 
-To load multiple packs later, if more are added:
+To load Microsoft 365 and the test pack together:
 
 ```powershell
-$env:BOT_DOMAINS = "microsoft365,another_domain"
+$env:BOT_DOMAINS = "microsoft365,test"
 python app.py
 ```
 

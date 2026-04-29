@@ -1,0 +1,126 @@
+{
+  "name": "test",
+  "domain_label": "Test Support",
+  "default_service": "test portal",
+  "supported_scope": "Test portal account, billing, and inventory support.",
+  "client": {
+    "chat_subtitle": "Test support triage.",
+    "input_placeholder": "Describe your test issue...",
+    "welcome_template": "Hi{name_part} I am ChatterRax, a Test Support bot here to help you out.",
+    "quick_action_template": "Work on {label}."
+  },
+  "routing": {
+    "loose_service_terms": {
+      "billing portal": ["invoice", "payment", "charge"],
+      "inventory": ["inventory", "stock", "sku"]
+    },
+    "service_focus_overrides": [
+      {
+        "service": "test portal",
+        "when_services": ["microsoft account", "microsoft 365"],
+        "terms": ["test portal", "portal", "login", "sign in", "password"]
+      },
+      {
+        "service": "billing portal",
+        "when_services": ["outlook", "microsoft 365"],
+        "terms": ["billing", "invoice", "payment", "charge"]
+      },
+      {
+        "service": "inventory",
+        "when_services": ["onedrive", "sharepoint", "microsoft 365"],
+        "terms": ["inventory", "stock", "sku"]
+      }
+    ]
+  },
+  "services": {
+    "test portal": {
+      "label": "Test Portal",
+      "keywords": ["test portal", "portal", "dashboard"],
+      "follow_up": "Tell me what part of the Test Portal failed.",
+      "reply_opener": "For Test Portal, start with the page, action, and exact error.",
+      "capability_terms": ["portal", "dashboard"]
+    },
+    "billing portal": {
+      "label": "Billing Portal",
+      "keywords": ["billing", "invoice", "payment", "charge"],
+      "follow_up": "Tell me which billing action failed.",
+      "reply_opener": "For Billing Portal, start with the invoice or payment action.",
+      "capability_terms": ["invoice", "payment", "charge"]
+    },
+    "inventory": {
+      "label": "Inventory",
+      "keywords": ["inventory", "stock", "sku"],
+      "follow_up": "Tell me which inventory item or SKU failed.",
+      "reply_opener": "For Inventory, start with the SKU and action.",
+      "capability_terms": ["inventory", "stock", "sku"]
+    }
+  },
+  "intents": {
+    "sign_in": {
+      "keywords": ["login", "sign in", "password"],
+      "wrap_up": "If sign-in still fails, keep the exact Test Portal error message."
+    },
+    "sync": {
+      "keywords": ["not updating", "stuck", "sync"],
+      "wrap_up": "If it still does not update, keep the affected record or SKU."
+    },
+    "payment": {
+      "keywords": ["payment", "invoice", "charge", "billing"],
+      "wrap_up": "If billing still fails, keep the invoice number and payment status."
+    }
+  },
+  "service_intent_responses": {
+    "billing portal|payment": [
+      "Billing Portal payment issues need the invoice, amount, and payment status checked first.",
+      "Open the invoice details page and confirm whether the payment shows pending, failed, or posted.",
+      "If the status is failed, keep the error message shown on the payment page."
+    ],
+    "test portal|sign_in": [
+      "Test Portal sign-in needs the account and browser path checked first.",
+      "Try a private browser window and confirm the account shown on the sign-in page."
+    ]
+  },
+  "knowledge_resources": [
+    {
+      "id": "test_portal_login",
+      "service": "test portal",
+      "intent": "sign_in",
+      "title": "Test Portal login fails",
+      "keywords": ["test portal", "portal", "login", "sign in"],
+      "steps": [
+        "Open the Test Portal in a private browser window.",
+        "Confirm the account email shown on the sign-in page.",
+        "If login still fails, copy the exact Test Portal error message."
+      ]
+    },
+    {
+      "id": "test_billing_payment_stuck",
+      "service": "billing portal",
+      "intent": "payment",
+      "title": "Billing Portal payment is stuck",
+      "keywords": ["billing", "payment", "invoice", "stuck", "charge"],
+      "steps": [
+        "Open the invoice details page.",
+        "Confirm whether the payment status is pending, failed, or posted.",
+        "If it is failed, keep the payment page error message for support."
+      ]
+    },
+    {
+      "id": "test_inventory_stock_not_updating",
+      "service": "inventory",
+      "intent": "sync",
+      "title": "Inventory stock is not updating",
+      "keywords": ["inventory", "stock", "sku", "not updating"],
+      "steps": [
+        "Open the affected SKU record.",
+        "Refresh the inventory page and confirm whether the stock count changes.",
+        "If it remains stale, keep the SKU and last update time."
+      ]
+    }
+  ],
+  "gemini": {
+    "extra_rules": [
+      "Stay inside Test Support. Do not route to services outside this pack."
+    ]
+  }
+}

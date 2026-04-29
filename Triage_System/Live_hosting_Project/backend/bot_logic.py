@@ -2957,7 +2957,10 @@ def _resolve_service_conflicts(candidate_services, message):
 
 
 def _detect_all_services(message):
-    return _detect_all_services_core(message, SERVICE_KEYWORDS)
+    return _resolve_service_conflicts(
+        _detect_all_services_core(message, SERVICE_KEYWORDS),
+        message,
+    )
 
 
 def _canonical_service(service_name, fallback=None):
