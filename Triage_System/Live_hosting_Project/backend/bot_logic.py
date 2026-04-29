@@ -32,6 +32,12 @@ from triage_core.detection import (
     service_label as _service_label_core,
     term_in_text as _term_in_text_core,
 )
+from triage_core.domain_config import (
+    DEFAULT_SERVICE as _BASE_DEFAULT_SERVICE,
+    as_tuple as _domain_tuple,
+    load_domain_packs,
+    unique_tuple,
+)
 from triage_core.memory import (
     _memory_tokens,
     build_thread_memory,
@@ -2694,6 +2700,123 @@ HARDWARE_FALLBACK_RESPONSES = {
 }
 
 
+DOMAIN_PACK = load_domain_packs()
+DEFAULT_SERVICE = str(DOMAIN_PACK.get("default_service") or _BASE_DEFAULT_SERVICE).strip().lower()
+DOMAIN_LABEL = str(DOMAIN_PACK.get("domain_label") or "Microsoft 365").strip()
+SUPPORTED_SCOPE_DESCRIPTION = str(
+    DOMAIN_PACK.get("supported_scope")
+    or "Microsoft workplace support issues for Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account."
+).strip()
+
+
+def _domain_key(value):
+    return str(value or "").strip().lower()
+
+
+def _is_default_service(service):
+    return _domain_key(service) == DEFAULT_SERVICE
+
+
+def _merge_terms(existing, incoming, replace=False):
+    if replace:
+        return unique_tuple(incoming)
+    return unique_tuple(existing, incoming)
+
+
+def _apply_domain_pack():
+    services = DOMAIN_PACK.get("services") or {}
+    intents = DOMAIN_PACK.get("intents") or {}
+    service_intent_responses = DOMAIN_PACK.get("service_intent_responses") or {}
+
+    if DOMAIN_PACK.get("replace_builtin_services"):
+        SERVICE_KEYWORDS.clear()
+        SERVICE_LABELS.clear()
+        SERVICE_FOLLOW_UPS.clear()
+        SERVICE_REPLY_OPENERS.clear()
+        SERVICE_CAPABILITY_TERMS.clear()
+        MULTI_SERVICE_GUIDANCE.clear()
+
+    if DOMAIN_PACK.get("replace_builtin_intents"):
+        INTENT_KEYWORDS.clear()
+        SHORT_STEP_RESPONSES.clear()
+
+    if (
+        DOMAIN_PACK.get("replace_builtin_responses")
+        or DOMAIN_PACK.get("replace_builtin_services")
+        or DOMAIN_PACK.get("replace_builtin_intents")
+    ):
+        SERVICE_INTENT_RESPONSES.clear()
+
+    for raw_service, raw_config in services.items():
+        service = _domain_key(raw_service)
+        if not service:
+            continue
+        config = raw_config if isinstance(raw_config, dict) else {"keywords": raw_config}
+        SERVICE_KEYWORDS[service] = _merge_terms(
+            SERVICE_KEYWORDS.get(service, ()),
+            config.get("keywords"),
+            replace=bool(config.get("replace_keywords")),
+        )
+        label = str(config.get("label") or "").strip()
+        if label:
+            SERVICE_LABELS[service] = label
+        follow_up = str(config.get("follow_up") or "").strip()
+        if follow_up:
+            SERVICE_FOLLOW_UPS[service] = follow_up
+        reply_opener = str(config.get("reply_opener") or "").strip()
+        if reply_opener:
+            SERVICE_REPLY_OPENERS[service] = reply_opener
+        capability_terms = config.get("capability_terms")
+        if capability_terms is not None:
+            SERVICE_CAPABILITY_TERMS[service] = _merge_terms(
+                SERVICE_CAPABILITY_TERMS.get(service, ()),
+                capability_terms,
+                replace=bool(config.get("replace_capability_terms")),
+            )
+        multi_guidance = str(config.get("multi_guidance") or "").strip()
+        if multi_guidance:
+            MULTI_SERVICE_GUIDANCE[service] = multi_guidance
+
+    SERVICE_KEYWORDS.setdefault(DEFAULT_SERVICE, (DEFAULT_SERVICE,))
+    SERVICE_LABELS.setdefault(DEFAULT_SERVICE, DOMAIN_LABEL or DEFAULT_SERVICE.title())
+    SERVICE_FOLLOW_UPS.setdefault(
+        DEFAULT_SERVICE,
+        "Tell me what area is affected, what you clicked, what happened next, and any exact wording.",
+    )
+    SERVICE_REPLY_OPENERS.setdefault(
+        DEFAULT_SERVICE,
+        f"Let us narrow this {SERVICE_LABELS[DEFAULT_SERVICE]} issue from the symptom.",
+    )
+
+    for raw_intent, raw_config in intents.items():
+        intent = _domain_key(raw_intent)
+        if not intent:
+            continue
+        config = raw_config if isinstance(raw_config, dict) else {"keywords": raw_config}
+        INTENT_KEYWORDS[intent] = _merge_terms(
+            INTENT_KEYWORDS.get(intent, ()),
+            config.get("keywords"),
+            replace=bool(config.get("replace_keywords")),
+        )
+        short_steps = config.get("short_steps")
+        if short_steps is not None:
+            SHORT_STEP_RESPONSES[intent] = list(_domain_tuple(short_steps))
+        wrap_up = str(config.get("wrap_up") or "").strip()
+        if wrap_up:
+            INTENT_WRAP_UPS[intent] = wrap_up
+
+    for raw_key, raw_steps in service_intent_responses.items():
+        if "|" not in str(raw_key):
+            continue
+        service, intent = (_domain_key(part) for part in str(raw_key).split("|", 1))
+        steps = list(_domain_tuple(raw_steps))
+        if service and intent and steps:
+            SERVICE_INTENT_RESPONSES[(service, intent)] = steps
+
+
+_apply_domain_pack()
+
+
 # ============================================================
 # Utility helpers
 # ============================================================
@@ -2723,7 +2846,11 @@ def _detect_all_services(message):
 
 
 def _canonical_service(service_name, fallback=None):
-    return _canonical_service_core(service_name, SERVICE_KEYWORDS, fallback=fallback)
+    return _canonical_service_core(
+        service_name,
+        SERVICE_KEYWORDS,
+        fallback=fallback or DEFAULT_SERVICE,
+    )
 
 
 def _service_label(service):
@@ -2776,7 +2903,7 @@ def _merge_thread_memory_with_session_summary(thread_memory, session_summary):
 
     for index, item in enumerate(summary_threads):
         service = _canonical_service(item.get("service"))
-        if not service or service == "microsoft 365":
+        if not service or _is_default_service(service):
             continue
 
         snippet = str(item.get("snippet") or "").strip()
@@ -2829,11 +2956,11 @@ def _merge_history_context_with_session_summary(history_context, session_summary
     services_mentioned = list(merged.get("services_mentioned") or [])
     for item in summary.get("threads") or []:
         service = _canonical_service(item.get("service"))
-        if service and service != "microsoft 365" and service not in services_mentioned:
+        if service and not _is_default_service(service) and service not in services_mentioned:
             services_mentioned.append(service)
 
     current_focus = _canonical_service(summary.get("current_focus"))
-    if current_focus and current_focus != "microsoft 365":
+    if current_focus and not _is_default_service(current_focus):
         merged["current_focus"] = current_focus
         merged["last_service"] = current_focus
         if current_focus not in services_mentioned:
@@ -2850,6 +2977,7 @@ def _extract_history_context(conversation_history, session_summary=""):
         conversation_history,
         normalize_message=_normalize_message,
         detect_all_services=_detect_all_services,
+        default_service=DEFAULT_SERVICE,
     )
     return _merge_history_context_with_session_summary(history_context, session_summary)
 
@@ -2862,6 +2990,7 @@ def _build_thread_memory(conversation_history, session_summary=""):
         get_hardware_context=_get_hardware_context,
         fuzzy_detect_service=_fuzzy_detect_service,
         detect_intent=_detect_intent,
+        default_service=DEFAULT_SERVICE,
     )
     return _merge_thread_memory_with_session_summary(thread_memory, session_summary)
 
@@ -2878,6 +3007,7 @@ def _clarify_current_application_reply(thread_memory):
     return clarify_current_application_reply(
         thread_memory,
         service_label=_service_label,
+        default_service=DEFAULT_SERVICE,
     )
 
 
@@ -2900,7 +3030,7 @@ def _capability_history_match(message, history_context, thread_memory):
 
     def add_prior(service):
         canonical = _canonical_service(service)
-        if canonical and canonical != "microsoft 365" and canonical not in prior_services:
+        if canonical and not _is_default_service(canonical) and canonical not in prior_services:
             prior_services.append(canonical)
 
     for service in history_context.get("services_mentioned") or []:
@@ -2963,7 +3093,7 @@ def _should_inherit_recent_service(
         return False
 
     last_service = history_context.get("current_focus") or history_context.get("last_service")
-    if not last_service or last_service == "microsoft 365":
+    if not last_service or _is_default_service(last_service):
         return False
 
     word_count = len(str(message or "").split())
@@ -2992,11 +3122,11 @@ def _inherited_context_is_ambiguous(
     if multi_context and multi_context.get("is_multi"):
         return False
     current_focus = history_context.get("current_focus")
-    if current_focus and current_focus != "microsoft 365":
+    if current_focus and not _is_default_service(current_focus):
         return False
     services_mentioned = [
         service for service in (history_context.get("services_mentioned") or [])
-        if service and service != "microsoft 365"
+        if service and not _is_default_service(service)
     ]
     if len(services_mentioned) <= 1:
         return False
@@ -3018,7 +3148,7 @@ def _refine_multi_issue_context(message, service, multi_context, explicit_servic
 
     services = [
         item for item in (multi_context.get("services") or [])
-        if item and item != "microsoft 365"
+        if item and not _is_default_service(item)
     ]
     hardware_terms = list(multi_context.get("hardware_terms") or [])
 
@@ -3151,13 +3281,14 @@ def _refine_multi_issue_context(message, service, multi_context, explicit_servic
         }
 
     if (
-        {"onedrive", "microsoft account"}.issubset(set(services))
-        and explicit_service == "onedrive"
+        "microsoft account" in services
+        and explicit_service in {"outlook", "teams", "onedrive"}
         and _contains_any(message, PASSWORD_PROMPT_LOOP_TERMS)
+        and not _contains_any(message, MICROSOFT_ACCOUNT_RECOVERY_TERMS)
     ):
         return {
             "is_multi": False,
-            "services": ["onedrive"],
+            "services": [explicit_service],
             "hardware_terms": [],
         }
 
@@ -3172,7 +3303,7 @@ def _thread_for_service(thread_memory, service):
 
 
 def _is_queue_handoff_message(message, service, thread_memory):
-    if not service or service == "microsoft 365":
+    if not service or _is_default_service(service):
         return False
     if not _thread_for_service(thread_memory, service):
         return False
@@ -3296,11 +3427,11 @@ def _history_recap_reply(thread_memory):
     threads = [
         thread
         for thread in (thread_memory.get("threads") or [])
-        if thread.get("service") and thread.get("service") != "microsoft 365"
+        if thread.get("service") and not _is_default_service(thread.get("service"))
     ]
     if not threads:
         return (
-            "I do not have a clear list of earlier app threads yet. Tell me the Microsoft app "
+            "I do not have a clear list of earlier threads yet. Tell me the app or area "
             "you want to go back to and I will focus there."
         )
 
@@ -3556,7 +3687,7 @@ def _should_auto_escalate(
         return False
 
     lower_message = str(message or "").lower()
-    if service in {"teams", "outlook", "windows", "microsoft account", "microsoft 365"}:
+    if service in {"teams", "outlook", "windows", "microsoft account", DEFAULT_SERVICE}:
         if _contains_any(lower_message, STRONG_OUTAGE_TERMS + WORK_STOPPAGE_TERMS + HIGH_PRIORITY_TERMS):
             return True
 
@@ -3567,7 +3698,7 @@ def _build_thread_summary(service, intent, priority, next_issue_options=None, th
     summary_threads = []
     for thread in (thread_memory or {}).get("threads", [])[:4]:
         thread_service = _canonical_service(thread.get("service"))
-        if not thread_service or thread_service == "microsoft 365":
+        if not thread_service or _is_default_service(thread_service):
             continue
         snippets = _service_thread_issue_snippets(thread_service, thread)
         summary_threads.append({
@@ -3629,7 +3760,7 @@ def _infer_priority(message, service, intent, multi_context=None):
     service_down_context = _has_service_down_context(lower_msg)
     urgent_handoff = _contains_any(lower_msg, URGENT_HANDOFF_TERMS)
     explicit_handoff = _detect_escalation_request(lower_msg)
-    critical_service = service in {"teams", "outlook", "windows", "microsoft account", "microsoft 365"}
+    critical_service = service in {"teams", "outlook", "windows", "microsoft account", DEFAULT_SERVICE}
 
     if _contains_any(lower_msg, STRONG_OUTAGE_TERMS):
         return "high"
@@ -3704,10 +3835,10 @@ def _ask_for_ticket_details(service):
 
 
 def _service_specific_prompt(service):
-    """Ask for detail when we only know the affected Microsoft service."""
+    """Ask for detail when we only know the affected service."""
     service_label = _service_label(service)
     follow_up = SERVICE_FOLLOW_UPS.get(
-        service or "microsoft 365", SERVICE_FOLLOW_UPS["microsoft 365"]
+        service or DEFAULT_SERVICE, SERVICE_FOLLOW_UPS[DEFAULT_SERVICE]
     )
     return _build_reply([
         SERVICE_REPLY_OPENERS.get(service, f"Let us narrow down the {service_label} issue."),
@@ -3758,9 +3889,9 @@ def _context_service_for_error_code(history_context, related_match, service):
         service,
     ):
         canonical = _canonical_service(candidate)
-        if canonical and canonical != "microsoft 365":
+        if canonical and not _is_default_service(canonical):
             return canonical
-    return "microsoft 365"
+    return DEFAULT_SERVICE
 
 
 def _context_intent_for_service(thread_memory, service, fallback_intent):
@@ -3774,10 +3905,10 @@ def _context_intent_for_service(thread_memory, service, fallback_intent):
 def _error_code_reply(service, intent, codes, has_context=True):
     code_text = ", ".join(codes)
     service_label = _service_label(service)
-    if not has_context or service == "microsoft 365":
+    if not has_context or _is_default_service(service):
         return _build_reply([
-            f"That code ({code_text}) is useful, but I need the Microsoft app before I map it to a fix.",
-            "Tell me which app showed it and what you clicked right before it appeared.",
+            f"That code ({code_text}) is useful, but I need the app or area before I map it to a fix.",
+            "Tell me where it appeared and what you clicked right before it showed up.",
         ])
 
     context_line = (
@@ -3883,7 +4014,7 @@ def _should_defer_ambiguous_surface_to_gemini(
     if not (has_surface_term and (has_error_code or has_ambiguous_failure)):
         return False
 
-    clear_service = explicit_service and explicit_service != "microsoft 365"
+    clear_service = explicit_service and not _is_default_service(explicit_service)
     if clear_service and intent != "unknown":
         return False
 
@@ -3899,7 +4030,7 @@ def _should_defer_ambiguous_surface_to_gemini(
         return False
 
     return service in {
-        "microsoft 365",
+        DEFAULT_SERVICE,
         "microsoft account",
         "windows",
         "word",
@@ -3949,9 +4080,9 @@ def _wrap_up_for(service, intent):
         return "If the site still will not load in multiple browsers, say ticket and include the URL and the error message you see."
     if service == "microsoft account" and intent == "password_reset":
         return "If the reset page will not accept your info, say ticket and include the exact message from the sign-in screen."
-    if service == "microsoft 365" and intent == "sign_in":
+    if _is_default_service(service) and intent == "sign_in":
         return "If sign-in still fails after clearing credentials, try signing in fresh from microsoft365.com in a private browser tab."
-    if service == "microsoft 365" and intent == "crash":
+    if _is_default_service(service) and intent == "crash":
         return "If multiple Office apps are still crashing after the repair, say ticket and note which apps fail and what error you see."
     if service == "teams" and intent == "notification":
         return "If notifications still do not appear, check Windows Focus assist — it can suppress all app alerts silently."
@@ -3965,7 +4096,7 @@ def _wrap_up_for(service, intent):
         return "If Teams is still slow in meetings, check whether the issue improves on Teams web — if it does, the desktop app needs a reinstall."
     if service == "outlook" and intent == "performance":
         return "If Outlook still loads slowly after disabling add-ins, try Outlook on the web to confirm whether it is the app or the mailbox."
-    if service == "microsoft 365" and intent == "activation":
+    if _is_default_service(service) and intent == "activation":
         return "If activation still fails after signing in correctly, use the Office Activation Troubleshooter from microsoft365.com."
     if service == "excel" and intent == "activation":
         return "If Excel still shows unlicensed after signing in, confirm your Microsoft 365 subscription is active at microsoft365.com."
@@ -3991,7 +4122,7 @@ def _rule_based_step_reply(service, intent):
     service_label = _service_label(service)
     reply_lines = list(SHORT_STEP_RESPONSES[intent])
     intro = ""
-    if service and service != "microsoft 365":
+    if service and not _is_default_service(service):
         intro = SERVICE_REPLY_OPENERS.get(
             service,
             f"Let us use the {service_label} clues to narrow this down.",
@@ -4560,7 +4691,7 @@ def _should_keep_office_app_context(service, hardware_context, message):
 
 
 def _multi_issue_reply(message, services, hardware_terms):
-    service_labels = [_service_label(service) for service in services if service != "microsoft 365"]
+    service_labels = [_service_label(service) for service in services if not _is_default_service(service)]
     generic_hardware_labels = {
         "mic",
         "microphone",
@@ -4651,14 +4782,14 @@ def _apply_model_result(response, model_result, detailed_enough,
     detected_services = [
         _canonical_service(service_name)
         for service_name in response.get("detected_services", [])
-        if _canonical_service(service_name) != "microsoft 365"
+        if not _is_default_service(_canonical_service(service_name))
     ]
     service = _canonical_service(
         model_result.get("service"), fallback=fallback_service
     )
     unique_detected_services = list(dict.fromkeys(detected_services))
     if (
-        fallback_service != "microsoft 365"
+        not _is_default_service(fallback_service)
         and service != fallback_service
         and len(unique_detected_services) == 1
         and unique_detected_services[0] == fallback_service
@@ -4771,7 +4902,7 @@ def handle_message(message, awaiting_ticket_detail=False,
     ):
         service = history_context["last_service"]
     else:
-        service = "microsoft 365"
+        service = DEFAULT_SERVICE
 
     unsupported_service = _detect_unsupported_service(msg)
     intent = _detect_intent(msg)
@@ -4786,7 +4917,7 @@ def handle_message(message, awaiting_ticket_detail=False,
     if service == "outlook" and _contains_any(msg, OUTLOOK_EMAIL_DELIVERY_TERMS):
         intent = "email_delivery"
     if (
-        service in {"outlook", "teams", "onedrive", "microsoft 365"}
+        service in {"outlook", "teams", "onedrive", DEFAULT_SERVICE}
         and _contains_any(msg, PASSWORD_PROMPT_LOOP_TERMS)
     ):
         intent = "sign_in"
@@ -4817,6 +4948,8 @@ def handle_message(message, awaiting_ticket_detail=False,
         intent = "sync"
     if service == "onedrive" and _contains_any(msg, ONEDRIVE_CONFLICT_TERMS):
         intent = "sync"
+    if service == "windows" and _contains_any(msg, INTENT_KEYWORDS.get("update", ())):
+        intent = "update"
     if (
         hardware_context["hardware_term"] in {"printer", "scanner"}
         and intent == "update"
@@ -4827,9 +4960,9 @@ def handle_message(message, awaiting_ticket_detail=False,
     detailed_enough = _has_detailed_description(msg)
     if (
         escalation_requested
-        and service == "microsoft 365"
+        and _is_default_service(service)
         and history_context.get("current_focus")
-        and history_context.get("current_focus") != "microsoft 365"
+        and not _is_default_service(history_context.get("current_focus"))
     ):
         service = history_context["current_focus"]
     multi_context = _get_multi_issue_context(msg, detected_services, hardware_context)
@@ -4853,7 +4986,7 @@ def handle_message(message, awaiting_ticket_detail=False,
         inherited_context_ambiguous = False
     inherited_recent_service = (
         service == history_context.get("last_service")
-        and service != "microsoft 365"
+        and not _is_default_service(service)
         and not explicit_service
         and not fuzzy_service
         and not hardware_context["suggested_service"]
@@ -4912,7 +5045,7 @@ def handle_message(message, awaiting_ticket_detail=False,
         user_is_correcting=user_is_correcting,
     )
     if prefer_gemini_for_ambiguous_surface:
-        service = "microsoft 365"
+        service = DEFAULT_SERVICE
         intent = "unknown"
         response.update({
             "service": service,
@@ -4928,7 +5061,7 @@ def handle_message(message, awaiting_ticket_detail=False,
 
         summary_service = payload.get("service")
         detected_summary_services = payload.get("detected_services") or []
-        if summary_service == "microsoft 365" and detected_summary_services:
+        if _is_default_service(summary_service) and detected_summary_services:
             summary_service = detected_summary_services[0]
 
         payload["thread_summary"] = _build_thread_summary(
@@ -4966,7 +5099,7 @@ def handle_message(message, awaiting_ticket_detail=False,
             related_match,
             service,
         )
-        has_context_service = context_service != "microsoft 365"
+        has_context_service = not _is_default_service(context_service)
         context_intent = _context_intent_for_service(
             thread_memory,
             context_service,
@@ -5061,7 +5194,7 @@ def handle_message(message, awaiting_ticket_detail=False,
     if _is_history_recap_request(msg):
         response.update({
             "resolved": True,
-            "service": "microsoft 365",
+            "service": DEFAULT_SERVICE,
             "reply": _history_recap_reply(thread_memory),
         })
         return _finalize_response(response)
@@ -5077,7 +5210,7 @@ def handle_message(message, awaiting_ticket_detail=False,
     ):
         response.update({
             "resolved": True,
-            "service": "microsoft 365",
+            "service": DEFAULT_SERVICE,
             "reply": _clarify_current_application_reply(thread_memory),
         })
         return _finalize_response(response)
@@ -5085,7 +5218,7 @@ def handle_message(message, awaiting_ticket_detail=False,
     if inherited_context_ambiguous and not escalation_requested and not awaiting_ticket_detail:
         response.update({
             "resolved": True,
-            "service": "microsoft 365",
+            "service": DEFAULT_SERVICE,
             "reply": _clarify_current_application_reply(thread_memory),
         })
         return _finalize_response(response)
@@ -5097,8 +5230,7 @@ def handle_message(message, awaiting_ticket_detail=False,
             "service": unsupported_service,
             "reply": (
                 f"I do not support {unsupported_service} in this bot. "
-                "I handle Microsoft workplace support issues for Teams, Outlook, "
-                "OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account."
+                f"I handle {SUPPORTED_SCOPE_DESCRIPTION}"
             ),
         })
         return _finalize_response(response)
@@ -5237,7 +5369,7 @@ def handle_message(message, awaiting_ticket_detail=False,
                 "needs_ticket": True,
                 "needs_description": False,
                 "create_ticket": False,
-                "service": "microsoft 365",
+                "service": DEFAULT_SERVICE,
             })
             return _finalize_response(response)
         if detailed_enough:
@@ -5279,7 +5411,7 @@ def handle_message(message, awaiting_ticket_detail=False,
                 "needs_ticket": True,
                 "needs_description": False,
                 "create_ticket": False,
-                "service": "microsoft 365",
+                "service": DEFAULT_SERVICE,
             })
             return _finalize_response(response)
         if detailed_enough:
@@ -5317,7 +5449,7 @@ def handle_message(message, awaiting_ticket_detail=False,
         )
         response.update({
             "resolved": True,
-            "service": "microsoft 365",
+            "service": DEFAULT_SERVICE,
             "detected_services": multi_context["services"],
             "reply": multi_reply,
             "next_issue_options": next_issue_options,
@@ -5631,7 +5763,7 @@ def handle_message(message, awaiting_ticket_detail=False,
     if (
         not prefer_gemini_for_ambiguous_surface
         and service
-        and service != "microsoft 365"
+        and not _is_default_service(service)
     ):
         response.update({
             "resolved": True,

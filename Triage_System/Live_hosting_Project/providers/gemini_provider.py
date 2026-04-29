@@ -11,6 +11,13 @@ from socket import timeout as SocketTimeout
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener, urlopen
 
+from triage_core.domain_config import (
+    DEFAULT_SERVICE,
+    intent_names,
+    load_domain_packs,
+    service_names,
+)
+
 try:
     from dotenv import load_dotenv
 except ImportError:
@@ -50,8 +57,11 @@ _REQUEST_TIMESTAMPS = deque()
 _NEXT_REQUEST_AT = 0.0
 _PAUSE_UNTIL = 0.0
 _CONSECUTIVE_429S = 0
+DOMAIN_PACK = load_domain_packs()
+DOMAIN_DEFAULT_SERVICE = DOMAIN_PACK.get("default_service") or DEFAULT_SERVICE
+DOMAIN_LABEL = DOMAIN_PACK.get("domain_label") or "Microsoft 365"
 
-_ALLOWED_SERVICES = {
+_BASE_ALLOWED_SERVICES = {
     "teams",
     "outlook",
     "onedrive",
@@ -63,7 +73,7 @@ _ALLOWED_SERVICES = {
     "microsoft account",
     "microsoft 365",
 }
-_ALLOWED_INTENTS = {
+_BASE_ALLOWED_INTENTS = {
     "password_reset",
     "sign_in",
     "sync",
@@ -81,7 +91,37 @@ _ALLOWED_INTENTS = {
     "printing",
     "unknown",
 }
+if DOMAIN_PACK.get("replace_builtin_services"):
+    _ALLOWED_SERVICES = service_names(DOMAIN_PACK)
+else:
+    _ALLOWED_SERVICES = _BASE_ALLOWED_SERVICES | service_names(DOMAIN_PACK)
+if DOMAIN_PACK.get("replace_builtin_intents"):
+    _ALLOWED_INTENTS = intent_names(DOMAIN_PACK) | {"unknown"}
+else:
+    _ALLOWED_INTENTS = _BASE_ALLOWED_INTENTS | intent_names(DOMAIN_PACK) | {"unknown"}
 _ALLOWED_PRIORITIES = {"low", "medium", "high"}
+_SERVICE_VALUES_TEXT = ", ".join(sorted(_ALLOWED_SERVICES | {"unknown"}))
+_INTENT_VALUES_TEXT = ", ".join(sorted(_ALLOWED_INTENTS))
+_IS_MICROSOFT_DOMAIN = "microsoft 365" in _ALLOWED_SERVICES
+_ROUTING_RULES_TEXT = (
+    """Do not switch to microsoft account unless the user is mainly locked out of the account itself, missing verification codes, or recovering account access.
+Password prompts inside Outlook, Teams, OneDrive, or Microsoft 365 apps should usually stay with that app.
+Map meeting audio/video with Teams mention to teams; file sync/cloud backup to onedrive; device, driver, install, printer, dock, Bluetooth, USB, Wi-Fi, monitor, mic, webcam, headset to windows unless a better Microsoft app fit is obvious."""
+    if _IS_MICROSOFT_DOMAIN
+    else """Stay inside the configured domain services. If the user mentions multiple supported areas, choose the one that owns the current symptom.
+If the service or issue is unclear, ask one focused clarification question instead of guessing.
+Use only the configured service values; do not introduce Microsoft-specific service names unless they are listed."""
+)
+_DOMAIN_EXTRA_RULES = tuple(
+    str(rule).strip()
+    for rule in (DOMAIN_PACK.get("gemini") or {}).get("extra_rules", [])
+    if str(rule).strip()
+)
+_DOMAIN_EXTRA_RULES_TEXT = (
+    "\n" + "\n".join(f"Domain rule: {rule}" for rule in _DOMAIN_EXTRA_RULES)
+    if _DOMAIN_EXTRA_RULES
+    else ""
+)
 
 _INTENT_ALIASES = {
     "hearing": "audio",
@@ -378,7 +418,7 @@ def _build_prompt(message, service_hint=None, conversation_history=None,
             + "\n"
         )
 
-    return f"""You are ChatterRax.
+    return f"""You are ChatterRax for the {DOMAIN_LABEL} domain.
 Output ONLY JSON with keys: service, intent, needs_ticket, needs_description, priority, reply.
 Reply should be 1-2 warm, specific sentences with no URLs.
 Current issue first. Only reuse earlier context if the user clearly points back.
@@ -386,20 +426,19 @@ If app or issue is unclear, ask one focused clarification question.
 For unclear app names, made-up error codes, vague popups, or missing details, do not open or suggest a ticket yet. Set needs_ticket false and ask for the app name, the action taken, or the exact message.
 Set needs_ticket true only when the user explicitly asks for a ticket, human, agent, or handoff, or when the issue is clearly business-critical with enough detail to route it.
 If the user clearly names an app and the issue happens inside that app, prefer that app as the service.
-Do not switch to microsoft account unless the user is mainly locked out of the account itself, missing verification codes, or recovering account access.
-Password prompts inside Outlook, Teams, OneDrive, or Microsoft 365 apps should usually stay with that app.
+{_ROUTING_RULES_TEXT}
 Never ask the user to share passwords, verification codes, recovery codes, or other secrets.
-Map meeting audio/video with Teams mention to teams; file sync/cloud backup to onedrive; device, driver, install, printer, dock, Bluetooth, USB, Wi-Fi, monitor, mic, webcam, headset to windows unless a better Microsoft app fit is obvious.
 Never use hardware words as the service value. Physical damage or power failure is out of scope.
 Use KB context as the grounded troubleshooting source when it matches the app and symptom. Adapt it to the user's wording; do not copy every step blindly.
 Never include URLs or tell the user to go read an article. Provide the fix path directly in the reply.
 needs_ticket and needs_description must be booleans.
-service values: teams, outlook, onedrive, sharepoint, excel, word, powerpoint, windows, microsoft account, microsoft 365, unknown
-intent values: password_reset, sign_in, sync, crash, status, outage, escalation, email_delivery, permissions, device_setup, audio, video, display, printing, unknown
+service values: {_SERVICE_VALUES_TEXT}
+intent values: {_INTENT_VALUES_TEXT}
 priority values: low, medium, high
 Use high only for widespread outages, multiple users affected, or a clearly work-stopping lockout with urgent timing.
 Use low for minor cosmetic or convenience issues like signatures, notifications, formatting, themes, or non-blocking preferences.
 Use medium for the normal single-user support case.
+{_DOMAIN_EXTRA_RULES_TEXT}
 Example schema: {{"service":"outlook","intent":"sync","needs_ticket":false,"needs_description":false,"priority":"medium","reply":"..."}}
 {history_block}
 {thread_block}
@@ -444,10 +483,11 @@ def _reply_requests_sensitive_info(reply_text):
 
 
 def _safe_reply_for_sensitive_request(service):
-    label = str(service or "").strip() or "this Microsoft app"
+    generic_label = "this Microsoft app" if _IS_MICROSOFT_DOMAIN else "this service"
+    label = str(service or "").strip() or generic_label
     if label == "unknown":
-        label = "this Microsoft app"
-    elif label != "this Microsoft app":
+        label = generic_label
+    elif label != generic_label:
         label = label.title()
     return (
         f"Do not share your password or verification codes here. In {label}, "
@@ -471,7 +511,7 @@ def _sanitize_result(raw_result, service_hint=None):
     )
     if model_service != "unknown":
         service = model_service
-    elif service_fallback in _ALLOWED_SERVICES | {"microsoft 365"}:
+    elif service_fallback in _ALLOWED_SERVICES | {DOMAIN_DEFAULT_SERVICE, "microsoft 365"}:
         service = service_fallback
     else:
         service = "unknown"

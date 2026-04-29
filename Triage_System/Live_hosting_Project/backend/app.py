@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import threading
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -28,6 +29,7 @@ from backend.db.db_service import (
 )
 from scheduler import start_scheduler
 from providers.gemini_provider import get_gemini_health_status
+from backend.db.connection import get_connection
 
 app = Flask(
     __name__,
@@ -62,8 +64,10 @@ _scheduler = start_scheduler()
 PENDING_TICKET_REQUESTS = {}
 CONVERSATION_HISTORY = {}
 ACTIVE_SESSIONS = {}        # keyed by conversation key; reused within one browser tab/session
+SESSION_LAST_SEEN = {}
 MAX_HISTORY_TURNS = 6
 SQL_HISTORY_TURNS = 24
+STATE_TTL_SECONDS = int(os.environ.get("CHAT_STATE_TTL_SECONDS", str(6 * 60 * 60)))
 _STATE_LOCK = threading.Lock()
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 PURE_TICKET_REQUESTS = {
@@ -85,6 +89,26 @@ def _conversation_key(user_email, client_session_id=None):
     if client_session_id:
         return f"{user_email}::{client_session_id}"
     return user_email
+
+
+def _prune_expired_state(now=None):
+    now = now or time.time()
+    cutoff = now - STATE_TTL_SECONDS
+    expired_keys = [
+        key for key, last_seen in SESSION_LAST_SEEN.items()
+        if last_seen < cutoff
+    ]
+    for key in expired_keys:
+        PENDING_TICKET_REQUESTS.pop(key, None)
+        CONVERSATION_HISTORY.pop(key, None)
+        ACTIVE_SESSIONS.pop(key, None)
+        SESSION_LAST_SEEN.pop(key, None)
+
+
+def _touch_conversation_state(conversation_key):
+    with _STATE_LOCK:
+        _prune_expired_state()
+        SESSION_LAST_SEEN[conversation_key] = time.time()
 
 
 def _is_valid_email(email):
@@ -170,6 +194,34 @@ def gemini_health():
     }), http_status
 
 
+@app.route("/health")
+def health():
+    database_ok = False
+    database_error = ""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        database_ok = cursor.fetchone()[0] == 1
+    except Exception as exc:
+        database_error = str(exc)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+    status_code = 200 if database_ok else 503
+    return jsonify({
+        "error": not database_ok,
+        "app": "ok",
+        "database": "ok" if database_ok else "unavailable",
+        "database_error": database_error,
+    }), status_code
+
+
 # =========================
 # Chat route
 # main endpoint that
@@ -219,6 +271,7 @@ def chat():
             }), 400
 
         conversation_key = _conversation_key(user_email, client_session_id)
+        _touch_conversation_state(conversation_key)
 
         user_id = get_or_create_chat_user(user_name, user_email, user_department)
         if user_id is None:
@@ -249,7 +302,8 @@ def chat():
                     "error": True
                 }), 500
             with _STATE_LOCK:
-                ACTIVE_SESSIONS[conversation_key] = session_id
+                session_id = ACTIVE_SESSIONS.setdefault(conversation_key, session_id)
+                SESSION_LAST_SEEN[conversation_key] = time.time()
 
         user_message_saved = save_chat_message(session_id, "user", user_message)
         if not user_message_saved:
@@ -330,6 +384,7 @@ def chat():
                 PENDING_TICKET_REQUESTS.pop(conversation_key, None)
                 CONVERSATION_HISTORY.pop(conversation_key, None)
                 ACTIVE_SESSIONS.pop(conversation_key, None)
+                SESSION_LAST_SEEN.pop(conversation_key, None)
 
         return jsonify({
             "reply": result["reply"],
@@ -347,7 +402,6 @@ def chat():
             "knowledge_confidence": result.get("knowledge_confidence", 0.0),
             "knowledge_source": result.get("knowledge_source", ""),
             "knowledge_learned": result.get("knowledge_learned", False),
-            "knowledge_source_url": result.get("knowledge_source_url", ""),
             "response_source": result.get("response_source", ""),
             "error": False
         })

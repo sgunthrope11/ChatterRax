@@ -74,7 +74,12 @@ def _is_meta_memory_message(message):
     return any(pattern in normalized for pattern in META_MEMORY_PATTERNS)
 
 
-def extract_history_context(conversation_history, normalize_message, detect_all_services):
+def extract_history_context(
+    conversation_history,
+    normalize_message,
+    detect_all_services,
+    default_service="microsoft 365",
+):
     history = conversation_history or []
     services_mentioned = []
     seen = set()
@@ -91,7 +96,7 @@ def extract_history_context(conversation_history, normalize_message, detect_all_
                 services_mentioned.append(service)
                 seen.add(service)
             last_service = service
-        if len(detected_services) == 1 and detected_services[0] != "microsoft 365":
+        if len(detected_services) == 1 and detected_services[0] != default_service:
             current_focus = detected_services[0]
 
     return {
@@ -132,6 +137,7 @@ def build_thread_memory(
     get_hardware_context,
     fuzzy_detect_service,
     detect_intent,
+    default_service="microsoft 365",
 ):
     threads_by_service = {}
     last_service = None
@@ -151,7 +157,7 @@ def build_thread_memory(
         candidate_services = [
             service_name
             for service_name in detected_services
-            if service_name and service_name != "microsoft 365"
+            if service_name and service_name != default_service
         ]
 
         if not candidate_services:
@@ -184,7 +190,7 @@ def build_thread_memory(
 
         normalized_services = []
         for service in candidate_services:
-            if service == "microsoft 365" and last_service:
+            if service == default_service and last_service:
                 service = last_service
             if service and service not in normalized_services:
                 normalized_services.append(service)
@@ -274,11 +280,11 @@ def related_history_match(message, thread_memory, contains_any):
     }
 
 
-def clarify_current_application_reply(thread_memory, service_label):
+def clarify_current_application_reply(thread_memory, service_label, default_service="microsoft 365"):
     recent_services = [
         thread.get("service")
         for thread in (thread_memory.get("threads") or [])[:2]
-        if thread.get("service") and thread.get("service") != "microsoft 365"
+        if thread.get("service") and thread.get("service") != default_service
     ]
 
     unique_services = []
@@ -290,15 +296,15 @@ def clarify_current_application_reply(thread_memory, service_label):
         labels = " or ".join(service_label(service) for service in unique_services[:2])
         return (
             f"I want to focus on the issue happening right now. Are we back on {labels}, "
-            "or is a different Microsoft app giving you trouble now?"
+            "or is a different supported area giving you trouble now?"
         )
     if len(unique_services) == 1:
         return (
             "I want to focus on the current issue first. Are we still working on the "
-            f"{service_label(unique_services[0])} problem, or is another Microsoft app the one acting up now?"
+            f"{service_label(unique_services[0])} problem, or is another supported area the one acting up now?"
         )
     return (
-        "I want to focus on the current issue first. Which Microsoft app is giving you trouble right now?"
+        "I want to focus on the current issue first. Which supported area is giving you trouble right now?"
     )
 
 

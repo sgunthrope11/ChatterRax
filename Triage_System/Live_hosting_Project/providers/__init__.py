@@ -1,1 +1,1 @@
-"""Provider modules for model, retrieval, status, and support-link logic."""
+"""Provider modules for model, retrieval, and status logic."""

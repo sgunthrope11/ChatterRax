@@ -1,0 +1,14 @@
+{
+  "name": "microsoft365",
+  "domain_label": "Microsoft 365",
+  "default_service": "microsoft 365",
+  "supported_scope": "Microsoft workplace support issues for Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account.",
+  "description": "Default ChatterRax live-demo domain. The built-in Microsoft 365 rules and replies remain active; this file is the stable plug-in point for future overlays.",
+  "services": {},
+  "intents": {},
+  "service_intent_responses": {},
+  "knowledge_resources": [],
+  "gemini": {
+    "extra_rules": []
+  }
+}

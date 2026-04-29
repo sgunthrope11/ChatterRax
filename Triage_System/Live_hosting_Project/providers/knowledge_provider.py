@@ -6,8 +6,19 @@ from pathlib import Path
 
 try:
     from providers.knowledge_resources_expanded import EXPANDED_KNOWLEDGE_RESOURCES
+    from providers.knowledge_resources_boost import ADDITIONAL_KNOWLEDGE_RESOURCES
+    from providers.knowledge_resources_it_expanded import IT_KNOWLEDGE_RESOURCES
 except ImportError:
     from .knowledge_resources_expanded import EXPANDED_KNOWLEDGE_RESOURCES
+    from .knowledge_resources_boost import ADDITIONAL_KNOWLEDGE_RESOURCES
+    from .knowledge_resources_it_expanded import IT_KNOWLEDGE_RESOURCES
+
+from triage_core.domain_config import (
+    DEFAULT_SERVICE,
+    domain_knowledge_resources,
+    load_domain_packs,
+    service_names,
+)
 
 
 CACHE_TTL_SECONDS = 900
@@ -20,9 +31,18 @@ _DATA_DIR = _ROOT_DIR / "data"
 LEARNED_KNOWLEDGE_PATH = Path(
     os.getenv("LEARNED_KNOWLEDGE_PATH", _DATA_DIR / "learned_knowledge.json")
 )
+DOMAIN_PACK = load_domain_packs()
+DOMAIN_DEFAULT_SERVICE = DOMAIN_PACK.get("default_service") or DEFAULT_SERVICE
+if DOMAIN_DEFAULT_SERVICE == "microsoft 365":
+    BROAD_SERVICE_HINT_SERVICES = {
+        "outlook", "teams", "onedrive", "sharepoint", "word", "excel",
+        "powerpoint", "microsoft account",
+    }
+else:
+    BROAD_SERVICE_HINT_SERVICES = service_names(DOMAIN_PACK) - {DOMAIN_DEFAULT_SERVICE}
 
 
-KNOWLEDGE_RESOURCES = (
+BUILTIN_KNOWLEDGE_RESOURCES = (
     {
         "id": "outlook_delivery_domain",
         "service": "outlook",
@@ -263,7 +283,13 @@ KNOWLEDGE_RESOURCES = (
             "If no verification method works, use account recovery or create a support ticket with the exact sign-in message.",
         ),
     },
-) + EXPANDED_KNOWLEDGE_RESOURCES
+) + EXPANDED_KNOWLEDGE_RESOURCES + ADDITIONAL_KNOWLEDGE_RESOURCES + IT_KNOWLEDGE_RESOURCES
+
+DOMAIN_KNOWLEDGE_RESOURCES = domain_knowledge_resources(DOMAIN_PACK)
+if DOMAIN_PACK.get("replace_builtin_knowledge"):
+    KNOWLEDGE_RESOURCES = DOMAIN_KNOWLEDGE_RESOURCES
+else:
+    KNOWLEDGE_RESOURCES = BUILTIN_KNOWLEDGE_RESOURCES + DOMAIN_KNOWLEDGE_RESOURCES
 
 
 def _safe_load_learned_resources():
@@ -290,7 +316,13 @@ def _safe_load_learned_resources():
             "source": str(resource.get("source") or "Learned Microsoft support memory"),
             "source_url": str(resource.get("source_url") or ""),
             "keywords": tuple(str(term) for term in resource.get("keywords", []) if term),
+            "required_any": tuple(
+                tuple(str(term) for term in group if term)
+                for group in resource.get("required_any", [])
+                if group
+            ),
             "steps": tuple(str(step) for step in resource.get("steps", []) if step),
+            "advanced_steps": tuple(str(step) for step in resource.get("advanced_steps", []) if step),
             "learned": True,
             "created_at": resource.get("created_at"),
         })
@@ -298,6 +330,8 @@ def _safe_load_learned_resources():
 
 
 def get_all_knowledge_resources():
+    if DOMAIN_PACK.get("replace_builtin_knowledge") and not DOMAIN_PACK.get("include_learned_knowledge"):
+        return tuple(KNOWLEDGE_RESOURCES)
     return tuple(KNOWLEDGE_RESOURCES) + tuple(_safe_load_learned_resources())
 
 
@@ -341,7 +375,9 @@ def add_learned_resource(resource):
         "source": str(resource.get("source") or "Official Microsoft support"),
         "source_url": str(resource.get("source_url") or ""),
         "keywords": list(resource.get("keywords") or ()),
+        "required_any": [list(group) for group in resource.get("required_any", [])],
         "steps": list(resource.get("steps") or ()),
+        "advanced_steps": list(resource.get("advanced_steps") or ()),
         "created_at": int(time.time()),
     })
     _write_learned_file(learned[-128:])
@@ -366,7 +402,32 @@ def _term_in_text(text, term):
     return re.search(pattern, text) is not None
 
 
+def _required_group_matches(query, group, service_hint=None):
+    for term in group:
+        normalized = str(term or "").strip().lower()
+        if not normalized:
+            continue
+        if _term_in_text(query, normalized):
+            return True
+        if service_hint and normalized == str(service_hint).strip().lower():
+            return True
+    return False
+
+
 def _score_resource(query, resource, service_hint=None, intent_hint=None):
+    if (
+        service_hint
+        and service_hint != DOMAIN_DEFAULT_SERVICE
+        and resource.get("service") != service_hint
+    ):
+        return 0.0, []
+
+    required_groups = resource.get("required_any") or ()
+    for group in required_groups:
+        terms = group if isinstance(group, (tuple, list, set)) else (group,)
+        if not _required_group_matches(query, terms, service_hint=service_hint):
+            return 0.0, []
+
     keywords = resource["keywords"]
     matched = [term for term in keywords if _term_in_text(query, term)]
     if not matched:
@@ -383,10 +444,7 @@ def _score_resource(query, resource, service_hint=None, intent_hint=None):
 
     if service_hint and service_hint == resource["service"]:
         score += 0.20
-    elif service_hint == "microsoft 365" and resource["service"] in {
-        "outlook", "teams", "onedrive", "sharepoint", "word", "excel",
-        "powerpoint", "microsoft account",
-    }:
+    elif service_hint == DOMAIN_DEFAULT_SERVICE and resource["service"] in BROAD_SERVICE_HINT_SERVICES:
         score += 0.05
 
     if intent_hint and intent_hint == resource["intent"]:
@@ -394,6 +452,9 @@ def _score_resource(query, resource, service_hint=None, intent_hint=None):
 
     if resource["service"] in matched:
         score += 0.07
+
+    if required_groups:
+        score += 0.04
 
     return min(score, 0.99), matched
 
@@ -420,15 +481,29 @@ def _cache_set(key, value):
 
 def _format_plan(resources):
     primary = resources[0]
-    lines = [
+    seed = sum(ord(char) for char in str(primary.get("id") or primary.get("title") or "kb"))
+    openers = (
         f"This lines up with {primary['title']}.",
+        f"I am matching this to {primary['title']}.",
+        f"The closest local playbook is {primary['title']}.",
+        f"That pattern fits {primary['title']}.",
+    )
+    headers = (
         "Try the safest checks first:",
+        "Work through these in order:",
+        "Start with these low-risk checks:",
+        "Use this path first:",
+    )
+    lines = [
+        openers[seed % len(openers)],
+        headers[seed % len(headers)],
     ]
 
     seen_steps = set()
     step_number = 1
     for resource in resources:
-        for step in resource["steps"]:
+        resource_steps = list(resource["steps"]) + list(resource.get("advanced_steps") or ())
+        for step in resource_steps:
             if step in seen_steps:
                 continue
             seen_steps.add(step)
@@ -439,9 +514,13 @@ def _format_plan(resources):
         if step_number > 6:
             break
 
-    lines.append(
-        "If your screen looks different, send me the exact wording you see and I will adjust the path."
+    wrap_ups = (
+        "If your screen looks different, send me the exact wording you see and I will adjust the path.",
+        "If the wording differs, send me the exact prompt or code and I will narrow the next step.",
+        "If it still fails after these checks, the exact error text will decide whether this needs a ticket.",
+        "If the first path does not match what you see, tell me the app screen and message so I can pivot.",
     )
+    lines.append(wrap_ups[seed % len(wrap_ups)])
     return "\n\n".join(lines)
 
 
