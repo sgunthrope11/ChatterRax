@@ -165,7 +165,11 @@ def send_ticket_created_email(
             sent_count = 0
             for recipient in recipients:
                 message = _build_message(sender, recipient, subject, body, html_body)
-                refused = smtp.send_message(message) or {}
+                try:
+                    refused = smtp.send_message(message) or {}
+                except Exception as exc:
+                    failed_recipients.append(f"{recipient} ({exc})")
+                    continue
                 if refused:
                     failed_recipients.append(recipient)
                 else:
@@ -173,7 +177,7 @@ def send_ticket_created_email(
 
         if failed_recipients:
             failed = ", ".join(failed_recipients)
-            return sent_count > 0, f"failed_recipients: {failed}"
+            return False, f"sent_count: {sent_count}; failed_recipients: {failed}"
         return sent_count == len(recipients), ""
     except Exception as exc:
         return False, str(exc)
