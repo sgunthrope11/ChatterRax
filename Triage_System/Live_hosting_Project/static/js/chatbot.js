@@ -13,6 +13,7 @@ const welcomeMessage = document.getElementById("chat-welcome-message");
 const PROFILE_STORAGE_KEY = "chatterrax-user-profile";
 const CHAT_CLIENT_ID_STORAGE_KEY = "chatterrax-chat-client-id";
 const BOT_RESPONSE_DELAY_MS = 900;
+const DOMAIN_CONFIG = window.CHATTERRAX_DOMAIN_CONFIG || {};
 
 let isSending = false;
 let profileSubmitted = false;
@@ -21,7 +22,11 @@ let profileSubmitted = false;
 function buildWelcomeMessage(profile = {}) {
     const providedName = String(profile.name || "").trim();
     const introName = providedName ? ` ${providedName},` : "!";
-    return `Hi${introName} I am ChatterRax Bot. I help triage Microsoft workplace issues across Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account access. Tell me what is going wrong and I will help sort the issue before we open a ticket.`;
+    const template = String(
+        DOMAIN_CONFIG.welcome_template ||
+        "Hi{name_part} I am ChatterRax Bot. Tell me what is going wrong and I will help sort the issue before we open a ticket."
+    );
+    return template.replace("{name_part}", introName);
 }
 
 
@@ -30,6 +35,9 @@ function renderWelcomeMessage(profile = {}) {
         return;
     }
     welcomeMessage.textContent = buildWelcomeMessage(profile);
+    if (userInput && DOMAIN_CONFIG.input_placeholder) {
+        userInput.placeholder = DOMAIN_CONFIG.input_placeholder;
+    }
 }
 
 

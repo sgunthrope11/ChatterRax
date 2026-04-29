@@ -2703,9 +2703,17 @@ HARDWARE_FALLBACK_RESPONSES = {
 DOMAIN_PACK = load_domain_packs()
 DEFAULT_SERVICE = str(DOMAIN_PACK.get("default_service") or _BASE_DEFAULT_SERVICE).strip().lower()
 DOMAIN_LABEL = str(DOMAIN_PACK.get("domain_label") or "Microsoft 365").strip()
+ACTIVE_DOMAIN_NAMES = tuple(
+    DOMAIN_PACK.get("domain_names") or (DOMAIN_PACK.get("name") or "microsoft365",)
+)
+IS_MICROSOFT_DOMAIN = "microsoft365" in ACTIVE_DOMAIN_NAMES or DEFAULT_SERVICE == "microsoft 365"
 SUPPORTED_SCOPE_DESCRIPTION = str(
     DOMAIN_PACK.get("supported_scope")
-    or "Microsoft workplace support issues for Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account."
+    or (
+        "Microsoft workplace support issues for Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account."
+        if IS_MICROSOFT_DOMAIN
+        else f"{DOMAIN_LABEL} support issues."
+    )
 ).strip()
 
 
@@ -2724,6 +2732,11 @@ def _merge_terms(existing, incoming, replace=False):
 
 
 def _apply_domain_pack():
+    global GREETING_REPLIES
+    global SOCIAL_GREETING_REPLIES
+    global RESOLUTION_REPLIES
+    global SCOPE_REPLIES
+
     services = DOMAIN_PACK.get("services") or {}
     intents = DOMAIN_PACK.get("intents") or {}
     service_intent_responses = DOMAIN_PACK.get("service_intent_responses") or {}
@@ -2739,6 +2752,7 @@ def _apply_domain_pack():
     if DOMAIN_PACK.get("replace_builtin_intents"):
         INTENT_KEYWORDS.clear()
         SHORT_STEP_RESPONSES.clear()
+        INTENT_WRAP_UPS.clear()
 
     if (
         DOMAIN_PACK.get("replace_builtin_responses")
@@ -2813,8 +2827,47 @@ def _apply_domain_pack():
         if service and intent and steps:
             SERVICE_INTENT_RESPONSES[(service, intent)] = steps
 
+    if not IS_MICROSOFT_DOMAIN:
+        GREETING_REPLIES = (
+            f"Hi, you are in the right place for {DOMAIN_LABEL} support. Tell me what is happening and I will help route it.",
+            f"Hello, I can work through {DOMAIN_LABEL} issues with you. Start with the area if you know it, or just describe what you are seeing.",
+        )
+        SOCIAL_GREETING_REPLIES = (
+            f"I am doing well, thanks for asking. Tell me which {DOMAIN_LABEL} area is acting up and I will help you sort it out.",
+            f"Ready when you are. Send the messy version of the {DOMAIN_LABEL} issue and I will narrow it down.",
+        )
+        RESOLUTION_REPLIES = (
+            f"Glad that is sorted. If another {DOMAIN_LABEL} issue comes up, send me what changed and I will help route it.",
+            "Good, I am glad that path worked. If anything else comes up, tell me the area and exact symptom.",
+        )
+        SCOPE_REPLIES = (
+            f"I am built for {SUPPORTED_SCOPE_DESCRIPTION} If this belongs there, send me the details and I will help.",
+            f"That sounds outside my lane. I handle {SUPPORTED_SCOPE_DESCRIPTION} Tell me the supported area and symptom if one is involved.",
+        )
+
 
 _apply_domain_pack()
+
+
+def get_domain_client_config():
+    visible_services = [
+        SERVICE_LABELS.get(service, service.title())
+        for service in SERVICE_KEYWORDS
+        if service and service != DEFAULT_SERVICE
+    ]
+    return {
+        "domain_label": DOMAIN_LABEL,
+        "default_service": DEFAULT_SERVICE,
+        "supported_scope": SUPPORTED_SCOPE_DESCRIPTION,
+        "service_labels": visible_services,
+        "chat_subtitle": f"{DOMAIN_LABEL} support triage and ticket intake.",
+        "input_placeholder": f"Describe your {DOMAIN_LABEL} issue...",
+        "welcome_template": (
+            "Hi{name_part} I am ChatterRax Bot. "
+            f"I help triage {SUPPORTED_SCOPE_DESCRIPTION} "
+            "Tell me what is going wrong and I will help sort the issue before we open a ticket."
+        ),
+    }
 
 
 # ============================================================
@@ -2865,12 +2918,25 @@ def _detect_unsupported_service(message):
     )
 
 
+def _active_hardware_service_map():
+    return HARDWARE_SERVICE_MAP if IS_MICROSOFT_DOMAIN else {}
+
+
 def _get_hardware_context(message):
+    if not IS_MICROSOFT_DOMAIN:
+        return _get_hardware_context_core(
+            message,
+            (),
+            (),
+            {},
+            (),
+            OUT_OF_SCOPE_HARDWARE,
+        )
     return _get_hardware_context_core(
         message,
         AUDIO_INPUT_ISSUE_TERMS,
         AUDIO_OUTPUT_ISSUE_TERMS,
-        HARDWARE_SERVICE_MAP,
+        _active_hardware_service_map(),
         FUZZY_HARDWARE_TERMS,
         OUT_OF_SCOPE_HARDWARE,
     )
@@ -3484,6 +3550,8 @@ def _retrieve_known_issue(message):
     This is intentionally narrow: no browser, no private data leaves
     the app, and entries must include both service and issue clues.
     """
+    if not IS_MICROSOFT_DOMAIN:
+        return None
     for entry in KNOWN_ISSUE_RETRIEVAL:
         if not _contains_any(message, entry["service_terms"]):
             continue
@@ -3606,7 +3674,7 @@ def _get_multi_issue_context(message, detected_services, hardware_context):
         detected_services,
         hardware_context,
         _fuzzy_detect_service,
-        HARDWARE_SERVICE_MAP,
+        _active_hardware_service_map(),
         MULTI_ISSUE_STRONG_MARKERS,
     )
 
@@ -4139,6 +4207,9 @@ def _rule_based_step_reply(service, intent):
 
 def _specialized_niche_reply(message):
     """Narrow deterministic replies for niche cases that should not need Gemini."""
+    if not IS_MICROSOFT_DOMAIN:
+        return None
+
     msg = _normalize_message(message)
 
     if _contains_any(msg, ("forwarding", "forward", "archive")) and _contains_any(msg, ("rule", "rules", "boss", "mail")):
@@ -5334,10 +5405,10 @@ def handle_message(message, awaiting_ticket_detail=False,
             "resolved": True,
             "reply": (
                 "It sounds like there may be a physical hardware issue with your "
-                "device. That usually needs repair or manufacturer support rather than a Microsoft settings change. "
+                "device. That usually needs repair or manufacturer support rather than a software settings change. "
                 "For hardware repairs, contact your device manufacturer or visit a "
-                "local repair service. If there is also a Microsoft software issue "
-                "involved, tell me that symptom and I will focus on the software side."
+                "local repair service. If there is also a supported software issue "
+                "involved, tell me that symptom and I will focus on that side."
             ),
         })
         return _finalize_response(response)

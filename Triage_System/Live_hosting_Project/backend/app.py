@@ -15,7 +15,7 @@ if str(_ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(_ROOT_DIR))
 load_dotenv(_ROOT_DIR / ".env")
 
-from backend.bot_logic import handle_message
+from backend.bot_logic import get_domain_client_config, handle_message
 from backend.db.db_service import (
     create_chat_session,
     create_ticket_for_session,
@@ -176,7 +176,10 @@ def home():
 
 @app.route("/chatbot")
 def chatbot_page():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        domain_config=get_domain_client_config(),
+    )
 
 
 @app.route("/admin")

@@ -84,7 +84,7 @@ def load_domain_pack(domain_name=None):
         return _empty_pack(name, path=path, load_error="missing")
 
     try:
-        with path.open("r", encoding="utf-8") as file:
+        with path.open("r", encoding="utf-8-sig") as file:
             data = json.load(file)
     except (OSError, json.JSONDecodeError) as exc:
         return _empty_pack(name, path=path, load_error=str(exc))

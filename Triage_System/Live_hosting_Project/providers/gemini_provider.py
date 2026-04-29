@@ -360,8 +360,8 @@ def _build_keyword_context_block(keyword_context):
             if str(step).strip()
         ]
         line = (
-            f"{index}. {resource.get('service', 'microsoft 365')} / "
-            f"{resource.get('intent', 'unknown')} / {resource.get('title', 'Microsoft issue')}. "
+            f"{index}. {resource.get('service', DOMAIN_DEFAULT_SERVICE)} / "
+            f"{resource.get('intent', 'unknown')} / {resource.get('title', f'{DOMAIN_LABEL} issue')}. "
             f"Matched: {matched_terms}. Checks: {' | '.join(steps) or 'none'}."
         )
         if advanced_steps:
@@ -491,7 +491,7 @@ def _safe_reply_for_sensitive_request(service):
         label = label.title()
     return (
         f"Do not share your password or verification codes here. In {label}, "
-        "sign out and back in, then use the official Microsoft reset flow only if you cannot regain access."
+        "sign out and back in, then use the official account recovery flow only if you cannot regain access."
     )
 
 
@@ -509,9 +509,12 @@ def _sanitize_result(raw_result, service_hint=None):
         _ALLOWED_SERVICES | {"unknown"},
         "unknown",
     )
+    allowed_fallback_services = _ALLOWED_SERVICES | {DOMAIN_DEFAULT_SERVICE}
+    if _IS_MICROSOFT_DOMAIN:
+        allowed_fallback_services.add("microsoft 365")
     if model_service != "unknown":
         service = model_service
-    elif service_fallback in _ALLOWED_SERVICES | {DOMAIN_DEFAULT_SERVICE, "microsoft 365"}:
+    elif service_fallback in allowed_fallback_services:
         service = service_fallback
     else:
         service = "unknown"

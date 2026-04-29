@@ -105,18 +105,18 @@
                     <div class="chat-panel-header">
                         <div>
                             <h2 class="chat-panel-title">ChatterRax Chat</h2>
-                            <p class="card-sub chat-panel-subtitle">Microsoft workplace support triage and ticket intake.</p>
+                            <p id="chat-domain-subtitle" class="card-sub chat-panel-subtitle">{{ domain_config.chat_subtitle }}</p>
                         </div>
                     </div>
 
                     <div id="chat-box">
                         <div id="chat-welcome-message" class="chat-msg-bot chat-welcome-bubble">
-                            Hi! I am ChatterRax Bot. I help triage Microsoft workplace issues across Teams, Outlook, OneDrive, Word, Excel, PowerPoint, Windows, and Microsoft account access. Tell me what is going wrong and I will help sort the issue before we open a ticket.
+                            {{ domain_config.welcome_template | replace("{name_part}", "!") }}
                         </div>
                     </div>
 
                     <div class="chat-composer">
-                        <input type="text" id="user-input" class="landing-input" placeholder="Describe your Microsoft issue..." autocomplete="off" style="flex:1;">
+                        <input type="text" id="user-input" class="landing-input" placeholder="{{ domain_config.input_placeholder }}" autocomplete="off" style="flex:1;">
                         <button id="send-btn" type="button" class="landing-submit-btn" style="width:auto; padding:0.75rem 1.25rem;">
                             Send
                         </button>
@@ -127,6 +127,9 @@
         </div>
     </main>
 
+    <script>
+        window.CHATTERRAX_DOMAIN_CONFIG = {{ domain_config | tojson }};
+    </script>
     <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
 </body>
 </html>
