@@ -22,3 +22,5 @@ Key files:
 - `Triage_System/Live_hosting_Project/domains/` - plug-and-play domain packs
 
 Do not commit real `.env` files. Use the tracked example files inside `Triage_System/Live_hosting_Project` when setting up a local or hosted deployment.
+
+Railway deployment is supported with the optional `railway.toml` in the app folder. Other Python hosts can ignore it and run the app with `gunicorn app:app`.

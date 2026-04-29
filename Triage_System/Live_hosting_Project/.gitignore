@@ -7,6 +7,7 @@ data/*.json
 !.env.example
 !.env.domain.example
 !.env.production.example
+!.env.railway.example
 GEMINI_PROMPTS.md
 .venv/
 venv/
