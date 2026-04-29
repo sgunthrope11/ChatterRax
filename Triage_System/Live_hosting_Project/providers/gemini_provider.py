@@ -11,21 +11,17 @@ from socket import timeout as SocketTimeout
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener, urlopen
 
+from triage_core.env_loader import load_project_env
+
+_ROOT_DIR = Path(__file__).resolve().parent.parent
+load_project_env(_ROOT_DIR)
+
 from triage_core.domain_config import (
     DEFAULT_SERVICE,
     intent_names,
     load_domain_packs,
     service_names,
 )
-
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    load_dotenv = None
-
-_ROOT_DIR = Path(__file__).resolve().parent.parent
-if load_dotenv:
-    load_dotenv(_ROOT_DIR / ".env")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")

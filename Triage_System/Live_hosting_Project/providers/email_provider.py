@@ -4,15 +4,11 @@ import smtplib
 from email.message import EmailMessage
 from pathlib import Path
 
-try:
-    from dotenv import load_dotenv
-except ImportError:  # pragma: no cover - python-dotenv is in project requirements
-    load_dotenv = None
+from triage_core.env_loader import load_project_env
 
 
 _ROOT_DIR = Path(__file__).resolve().parent.parent
-if load_dotenv:
-    load_dotenv(_ROOT_DIR / ".env")
+load_project_env(_ROOT_DIR)
 
 
 def _enabled():

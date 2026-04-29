@@ -6,14 +6,15 @@ import threading
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 # Load environment variables before importing providers that read config at import time.
 _ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(_ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(_ROOT_DIR))
-load_dotenv(_ROOT_DIR / ".env")
+from triage_core.env_loader import load_project_env
+
+load_project_env(_ROOT_DIR)
 
 from backend.bot_logic import DEFAULT_SERVICE, get_domain_client_config, handle_message
 from backend.db.db_service import (

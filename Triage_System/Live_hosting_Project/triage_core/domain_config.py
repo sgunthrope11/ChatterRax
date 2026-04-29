@@ -2,6 +2,8 @@ import json
 import os
 from pathlib import Path
 
+from triage_core.env_loader import load_project_env
+
 
 DEFAULT_DOMAIN_NAME = "microsoft365"
 DEFAULT_SERVICE = "microsoft 365"
@@ -9,6 +11,7 @@ DEFAULT_DOMAIN_LABEL = "Microsoft 365"
 
 _ROOT_DIR = Path(__file__).resolve().parent.parent
 _DOMAINS_DIR = _ROOT_DIR / "domains"
+load_project_env(_ROOT_DIR)
 
 
 def _normalize_key(value):
