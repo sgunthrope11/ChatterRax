@@ -14,7 +14,7 @@ The app collects a user's name, email, and department, runs the message through 
 - Ticket email provider: `providers/email_provider.py`
 - PostgreSQL schema: `schema.sql`
 - Domain packs: `domains/microsoft365/domain.json` and `domains/test/domain.json`
-- Deployment files: `Procfile`, `render.yaml`, `requirements.txt`, `.env.production.example`, and optional `railway.toml`
+- Deployment files: `Procfile`, `render.yaml`, `requirements.txt`, and `.env.production.example`
 
 ## Request Flow
 
@@ -57,7 +57,6 @@ Tracked examples:
 - `.env.example` - general local/production placeholders
 - `.env.domain.example` - safe domain-only placeholders
 - `.env.production.example` - hosted deployment placeholders
-- `.env.railway.example` - optional Railway variable placeholders
 
 Ignored local files:
 
@@ -164,9 +163,17 @@ Render will prompt for secret values marked with `sync: false`:
 DATABASE_URL
 GEMINI_API_KEY
 ADMIN_PASSWORD
+APP_PUBLIC_URL
+TICKET_ADMIN_URL
+TICKET_EMAIL_TO
+SMTP_USERNAME
+SMTP_PASSWORD
+SMTP_FROM
 ```
 
 Use an external PostgreSQL provider for `DATABASE_URL`. For a free setup that does not have Render's 30-day Postgres expiration, create an Aiven for PostgreSQL Free service and paste its service URI into Render's `DATABASE_URL` prompt.
+
+`render.yaml` also declares the safe production defaults the app reads at runtime, including Flask debug mode, chat state TTL, domain selection, Gemini model/rate-limit settings, and disabled ticket email defaults.
 
 After the service deploys, set this variable in Render if you enable ticket email links:
 
@@ -205,32 +212,6 @@ SMTP_FROM=your_sending_gmail@gmail.com
 ```
 
 Use a Gmail app password, not a normal Gmail password.
-
-## Optional Railway Deployment
-
-Railway is supported as one deployment option, but the app is not locked to Railway. The included `railway.toml` only defines a Railway start command, health check, and restart policy for people who want to deploy there.
-
-Because this repository keeps the production app inside a nested folder, set these Railway service settings:
-
-```text
-Root Directory: Triage_System/Live_hosting_Project
-Config File Path: /Triage_System/Live_hosting_Project/railway.toml
-Start Command: gunicorn app:app
-```
-
-Then add variables from `.env.railway.example` in Railway's service variables. Railway also provides `RAILWAY_PUBLIC_DOMAIN`; you can set:
-
-```text
-APP_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
-```
-
-or set the admin link directly:
-
-```text
-TICKET_ADMIN_URL=https://YOUR_PUBLIC_DOMAIN/admin
-```
-
-For PostgreSQL, add a Railway Postgres service and set `DATABASE_URL` to the Postgres connection string exposed to the app service.
 
 ## Domain Packs
 
@@ -317,7 +298,6 @@ Each recipient receives a separate email.
 
 - Do not commit `.env`, `.env.domain`, or `GEMINI_PROMPTS.md`.
 - Set production variables in your hosting provider's environment/secret settings.
-- Railway users can use `railway.toml` and `.env.railway.example`; other hosts can ignore them.
 - Restart the app after changing domain env values.
 - Keep M365 as the placeholder/demo pack unless replacing it intentionally.
 - Use a public/external database URL for local testing against a hosted database.
