@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: chatterrax-live
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: Triage_System/Live_hosting_Project
+    buildCommand: pip install -r requirements.txt
+    startCommand: "sh -c 'gunicorn app:app --bind 0.0.0.0:${PORT:-10000} -w 1 --threads 4'"
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: CHAT_STATE_TTL_SECONDS
+        value: "21600"
+      - key: BOT_DOMAIN
+        value: microsoft365
+      - key: GEMINI_ENABLED
+        value: "True"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TICKET_EMAIL_ENABLED
+        value: "False"
