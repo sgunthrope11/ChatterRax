@@ -14,7 +14,7 @@ The app collects a user's name, email, and department, runs the message through 
 - Ticket email provider: `providers/email_provider.py`
 - PostgreSQL schema: `schema.sql`
 - Domain packs: `domains/microsoft365/domain.json` and `domains/test/domain.json`
-- Deployment files: `Procfile`, `render.yaml`, `requirements.txt`, and `.env.production.example`
+- Deployment files: `Procfile`, `requirements.txt`, and `.env.production.example`
 
 ## Request Flow
 
@@ -143,45 +143,39 @@ The included `Procfile` declares the same command for hosts that support Procfil
 web: gunicorn app:app --bind 0.0.0.0:${PORT:-10000} -w 1 --threads 4
 ```
 
-## Render Deployment
+## Hosted Deployment
 
-This folder includes `render.yaml` for a Render Blueprint. It creates:
+This project includes a deployment manifest for a Python web service. It declares:
 
 - a Python web service named `chatterrax-live`
 - required runtime variables for Flask, the Microsoft 365 domain pack, Gemini, admin auth, and your external Postgres database
 
-Because this app lives inside a nested repository folder, use these settings when creating the Blueprint from Render:
+Because this app lives inside a nested repository folder, set the service root directory to:
 
 ```text
-Blueprint file path: Triage_System/Live_hosting_Project/render.yaml
-Service root directory: Triage_System/Live_hosting_Project
+Triage_System/Live_hosting_Project
 ```
 
-Render will prompt for secret values marked with `sync: false`:
+The deployment manifest keeps real secret values out of source control. Add these secret values in the hosting provider's environment settings:
 
 ```text
 DATABASE_URL
 GEMINI_API_KEY
 ADMIN_PASSWORD
-APP_PUBLIC_URL
-TICKET_ADMIN_URL
-TICKET_EMAIL_TO
-SMTP_USERNAME
 SMTP_PASSWORD
-SMTP_FROM
 ```
 
-Use an external PostgreSQL provider for `DATABASE_URL`. For a free setup that does not have Render's 30-day Postgres expiration, create an Aiven for PostgreSQL Free service and paste its service URI into Render's `DATABASE_URL` prompt.
+Use an external PostgreSQL provider for `DATABASE_URL`. For a free setup, create an Aiven for PostgreSQL Free service and paste its service URI into the hosting provider's `DATABASE_URL` environment variable. Use the Aiven service URI with TLS enabled; if you build the URI manually, include `sslmode=require`.
 
-`render.yaml` also declares the safe production defaults the app reads at runtime, including Flask debug mode, chat state TTL, domain selection, Gemini model/rate-limit settings, and disabled ticket email defaults.
+The deployment manifest also declares the safe production defaults the app reads at runtime, including Flask debug mode, chat state TTL, domain selection, Gemini model and rate-limit settings, and disabled ticket email defaults.
 
-After the service deploys, set this variable in Render if you enable ticket email links:
+After the service deploys, set this variable if you enable ticket email links:
 
 ```text
-APP_PUBLIC_URL=https://YOUR-RENDER-SERVICE.onrender.com
+APP_PUBLIC_URL=https://your-public-app-domain.example.com
 ```
 
-Leave `TICKET_EMAIL_ENABLED=False` on Render Free web services. Render Free web services cannot send SMTP traffic on common mail ports like 587; use a paid web service or an email API if ticket emails need to be sent from Render.
+Leave `TICKET_EMAIL_ENABLED=False` unless the host allows outbound SMTP traffic on your configured mail port. If SMTP is blocked, use a host that supports outbound mail or replace SMTP with an email API.
 
 Minimum hosted variables:
 

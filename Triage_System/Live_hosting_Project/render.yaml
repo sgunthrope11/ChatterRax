@@ -60,11 +60,11 @@ services:
       - key: TICKET_EMAIL_ENABLED
         value: "False"
       - key: APP_PUBLIC_URL
-        sync: false
+        value: ""
       - key: TICKET_ADMIN_URL
-        sync: false
+        value: ""
       - key: TICKET_EMAIL_TO
-        sync: false
+        value: ""
       - key: SMTP_HOST
         value: smtp.gmail.com
       - key: SMTP_PORT
@@ -72,8 +72,8 @@ services:
       - key: SMTP_USE_TLS
         value: "True"
       - key: SMTP_USERNAME
-        sync: false
+        value: ""
       - key: SMTP_PASSWORD
         sync: false
       - key: SMTP_FROM
-        sync: false
+        value: ""
