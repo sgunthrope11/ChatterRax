@@ -1,0 +1,79 @@
+services:
+  - type: web
+    name: chatterrax-live
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: Triage_System/Live_hosting_Project
+    buildCommand: pip install -r requirements.txt
+    startCommand: "sh -c 'gunicorn app:app --bind 0.0.0.0:${PORT:-10000} -w 1 --threads 4'"
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: CHAT_STATE_TTL_SECONDS
+        value: "21600"
+      - key: BOT_DOMAIN
+        value: microsoft365
+      - key: BOT_DOMAINS
+        value: ""
+      - key: BOT_DOMAIN_PATH
+        value: ""
+      - key: LEARNED_KNOWLEDGE_PATH
+        value: data/learned_knowledge.json
+      - key: GEMINI_ENABLED
+        value: "True"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: GEMINI_TIMEOUT_SECONDS
+        value: "30"
+      - key: GEMINI_TEMPERATURE
+        value: "0.3"
+      - key: GEMINI_MAX_TOKENS
+        value: "1024"
+      - key: GEMINI_THINKING_BUDGET
+        value: "0"
+      - key: GEMINI_BYPASS_PROXY
+        value: "True"
+      - key: GEMINI_TPM_LIMIT
+        value: "250000"
+      - key: GEMINI_RPM_LIMIT
+        value: "5"
+      - key: GEMINI_MIN_REQUEST_INTERVAL_SECONDS
+        value: "0.25"
+      - key: GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS
+        value: "3"
+      - key: GEMINI_RATE_LIMIT_RETRIES
+        value: "1"
+      - key: GEMINI_429_COOLDOWN_SECONDS
+        value: "8"
+      - key: GEMINI_429_MAX_COOLDOWN_SECONDS
+        value: "300"
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TICKET_EMAIL_ENABLED
+        value: "False"
+      - key: APP_PUBLIC_URL
+        sync: false
+      - key: TICKET_ADMIN_URL
+        sync: false
+      - key: TICKET_EMAIL_TO
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USE_TLS
+        value: "True"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
