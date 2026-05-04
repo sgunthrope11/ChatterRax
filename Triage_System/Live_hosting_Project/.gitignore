@@ -4,7 +4,6 @@ __pycache__/
 data/*.json
 .env
 .env.*
-!.env.example
 !.env.domain.example
 !.env.production.example
 GEMINI_PROMPTS.md

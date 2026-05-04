@@ -54,7 +54,6 @@ Do not commit real secrets. The project intentionally separates secret settings 
 
 Tracked examples:
 
-- `.env.example` - general local/production placeholders
 - `.env.domain.example` - safe domain-only placeholders
 - `.env.production.example` - hosted deployment placeholders
 

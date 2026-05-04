@@ -335,6 +335,6 @@ BOT_DOMAIN=microsoft365
 FLASK_DEBUG=False
 ```
 
-Use `.env.example` or `.env.production.example` as clean import templates. They only list variables this app currently reads.
+Use `.env.production.example` and `.env.domain.example` as clean import templates. They only list variables this app currently reads.
 
 Remove any older support-link or recommended-article URL variables from your hosting provider if they are still present. The app no longer reads or needs those values.
